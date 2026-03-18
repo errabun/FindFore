@@ -1,0 +1,10 @@
+{
+  "name": "forefinder",
+  "private": true,
+  "scripts": {
+    "heroku-postbuild": "cd frontend && npm ci && npm run build"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

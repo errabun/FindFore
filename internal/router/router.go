@@ -1,6 +1,11 @@
 package router
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -46,5 +51,31 @@ func New(h *handler.Handler, jwtSecret string) *chi.Mux {
 		r.Post("/sessions", h.CreateSession)
 	})
 
+	// Serve frontend static files
+	staticDir := frontendDistDir()
+	if staticDir != "" {
+		fileServer := http.FileServer(http.Dir(staticDir))
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			// Serve static file if it exists (JS, CSS, images, etc.)
+			path := filepath.Join(staticDir, r.URL.Path)
+			if _, err := os.Stat(path); err == nil && !strings.HasSuffix(r.URL.Path, "/") {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			// Otherwise serve index.html for SPA client-side routing
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+		})
+	}
+
 	return r
+}
+
+func frontendDistDir() string {
+	candidates := []string{"frontend/dist", "../frontend/dist"}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.IsDir() {
+			return c
+		}
+	}
+	return ""
 }

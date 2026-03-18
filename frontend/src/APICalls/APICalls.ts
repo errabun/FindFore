@@ -1,6 +1,6 @@
 import type { Player, Course, Event, LoginResponse, Post, Reaction, Reply } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 const endpoints = {
   players: `${API_BASE}/api/v1/players`,
