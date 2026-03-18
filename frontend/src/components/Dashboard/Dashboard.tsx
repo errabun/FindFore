@@ -143,6 +143,7 @@ const Dashboard = ({
                 title='Committed Tee Times'
                 events={committedTeeTimes}
                 handleInviteAction={handleInviteAction}
+                currentUserId={currentUserId}
               />
               <TeeTimeContainer
                 title='Available Tee Times'
@@ -161,6 +162,7 @@ const Dashboard = ({
             title='Committed Tee Times'
             events={committedTeeTimes}
             handleInviteAction={handleInviteAction}
+            currentUserId={currentUserId}
           />
         )}
         {activeTab === 'available' && screenWidth < 768 && (

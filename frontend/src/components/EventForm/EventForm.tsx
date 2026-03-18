@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { postEvent } from '../../APICalls/APICalls';
+import { useState, useRef, useCallback } from 'react';
+import { postEvent, searchCourses, findOrCreateCourse } from '../../APICalls/APICalls';
 import PostResultMessage from './PostResultMessage';
 import {
   Paper,
   Select,
+  Autocomplete,
   Button,
   Title,
   Stack,
@@ -14,6 +15,7 @@ import {
   SimpleGrid,
   Center,
   Box,
+  Loader,
 } from '@mantine/core';
 import { DateInput, TimeInput } from '@mantine/dates';
 import dayjs from 'dayjs';
@@ -26,7 +28,7 @@ interface EventFormProps {
   refreshEvents: () => void;
 }
 
-function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) {
+function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
   const tomorrow = dayjs().add(1, 'day').toDate();
 
   const [date, setDate] = useState<Date | null>(tomorrow);
@@ -34,11 +36,60 @@ function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) 
   const [openSpots, setOpenSpots] = useState<string | null>('2');
   const [selectedFriends, setSelectedFriends] = useState<number[]>([]);
   const [numHoles, setNumHoles] = useState('18');
-  const [golfCourse, setGolfCourse] = useState<string | null>('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [allFriends, setAllFriends] = useState(false);
   const [postError, setPostError] = useState(false);
   const [postAttempt, setPostAttempt] = useState(false);
+
+  // Course search state
+  const [courseQuery, setCourseQuery] = useState('');
+  const [courseResults, setCourseResults] = useState<Course[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const justSelectedRef = useRef(false);
+
+  const courseLabel = (c: Course) =>
+    `${c.name} — ${c.city}, ${c.state}`;
+
+  const handleCourseSearch = useCallback((value: string) => {
+    setCourseQuery(value);
+
+    // Skip reset if this onChange was triggered by selecting an option
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
+
+    setSelectedCourse(null);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.length < 3) {
+      setCourseResults([]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      setSearching(true);
+      searchCourses(value)
+        .then((results) => setCourseResults(results))
+        .catch(() => setCourseResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+  }, []);
+
+  const handleCourseSelect = (value: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearching(false);
+    justSelectedRef.current = true;
+    const idx = parseInt(value, 10);
+    const course = courseResults[idx];
+    if (course) {
+      setSelectedCourse(course);
+      setCourseQuery(courseLabel(course));
+    }
+  };
 
   const addFriendToInvite = (friendId: number, checked: boolean) => {
     if (checked) {
@@ -59,12 +110,24 @@ function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) 
     }
   };
 
-  const submitForm = () => {
+  const submitForm = async () => {
+    if (!selectedCourse || !teeTime) return;
+
     setPostAttempt(true);
-    const formattedDate = dayjs(date).format('YYYY-MM-DD');
-    if (golfCourse && teeTime) {
-      postEvent(
-        golfCourse,
+    try {
+      const saved = await findOrCreateCourse({
+        name: selectedCourse.name,
+        street: selectedCourse.street,
+        city: selectedCourse.city,
+        state: selectedCourse.state,
+        zip_code: selectedCourse.zip_code || '',
+        phone: selectedCourse.phone || '',
+        cost: selectedCourse.cost || '',
+      });
+
+      const formattedDate = dayjs(date).format('YYYY-MM-DD');
+      await postEvent(
+        String(saved.id),
         formattedDate,
         teeTime,
         openSpots || '2',
@@ -72,7 +135,9 @@ function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) 
         isPrivate,
         hostId,
         selectedFriends
-      )?.catch(() => setPostError(true));
+      );
+    } catch {
+      setPostError(true);
     }
   };
 
@@ -116,15 +181,17 @@ function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) 
               <Box>
                 <Text fw={600} size='sm' c='forest.8' mb='xs'>Details</Text>
                 <Stack gap='sm'>
-                  <Select
+                  <Autocomplete
                     label='Golf Course'
-                    placeholder='Please Select a Course'
-                    value={golfCourse}
-                    onChange={setGolfCourse}
-                    data={courses.map((course) => ({
-                      value: String(course.id),
-                      label: course.name,
+                    placeholder='Search for a course...'
+                    value={courseQuery}
+                    onChange={handleCourseSearch}
+                    onOptionSubmit={handleCourseSelect}
+                    data={courseResults.map((c, i) => ({
+                      value: String(i),
+                      label: courseLabel(c),
                     }))}
+                    rightSection={searching ? <Loader size='xs' /> : undefined}
                     required
                   />
                   <Select
@@ -202,7 +269,7 @@ function EventForm({ courses, friends, hostId, refreshEvents }: EventFormProps) 
                 color='forest'
                 size='md'
                 fullWidth
-                disabled={!golfCourse || !isValidTime}
+                disabled={!selectedCourse || !isValidTime}
                 onClick={submitForm}
                 className='form-submit'
                 mt='sm'

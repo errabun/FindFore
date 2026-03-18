@@ -13,6 +13,7 @@ interface TeeTimeContainerProps {
   friendsEvents?: Event[];
   friendIds?: number[];
   handleInviteAction: HandleInviteAction;
+  currentUserId?: number;
 }
 
 const TeeTimeContainer = ({
@@ -21,6 +22,7 @@ const TeeTimeContainer = ({
   friendsEvents = [],
   friendIds = [],
   handleInviteAction,
+  currentUserId,
 }: TeeTimeContainerProps) => {
   const [publicInvites, setPublicInvites] = useState<Event[]>([]);
   const [privateInvites, setPrivateInvites] = useState<Event[]>([]);
@@ -51,6 +53,7 @@ const TeeTimeContainer = ({
           type={getEventType.current()}
           event={event}
           handleInviteAction={handleInviteAction}
+          currentUserId={currentUserId}
         />
       );
     });

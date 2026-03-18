@@ -9,8 +9,10 @@ import {
   Routes,
   Route,
   Navigate,
+  useParams,
 } from 'react-router-dom';
 import EventForm from '../EventForm/EventForm';
+import EditTeeTime from '../EditTeeTime/EditTeeTime';
 import {
   getAllCourses,
   getAllPlayers,
@@ -286,10 +288,35 @@ function App() {
             )
           }
         />
+        <Route
+          path='/edit-tee-time/:eventId'
+          element={
+            !hostPlayer ? (
+              <Navigate to='/login' replace />
+            ) : (
+              <EditTeeTimeRoute
+                events={events}
+                friends={friends}
+                refreshEvents={refreshEvents}
+              />
+            )
+          }
+        />
         <Route path='*' element={<Navigate to='/login' />} />
       </Routes>
     </Router>
   );
+}
+
+function EditTeeTimeRoute({ events, friends, refreshEvents }: { events: Event[]; friends: Friend[]; refreshEvents: () => void }) {
+  const { eventId } = useParams();
+  const event = events.find((e) => e.id === Number(eventId));
+
+  if (!event) {
+    return <Navigate to='/dashboard' replace />;
+  }
+
+  return <EditTeeTime event={event} friends={friends} refreshEvents={refreshEvents} />;
 }
 
 export default App;

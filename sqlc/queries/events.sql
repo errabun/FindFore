@@ -38,8 +38,17 @@ INSERT INTO events (course_id, date, tee_time, open_spots, number_of_holes, priv
 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 RETURNING id, course_id, date, tee_time, open_spots, number_of_holes, private, host_id;
 
+-- name: UpdateEvent :exec
+UPDATE events
+SET course_id = $2, date = $3, tee_time = $4, open_spots = $5,
+    number_of_holes = $6, private = $7, updated_at = NOW()
+WHERE id = $1;
+
 -- name: DeleteEvent :exec
 DELETE FROM events WHERE id = $1;
+
+-- name: DeletePastEvents :exec
+DELETE FROM events WHERE date < $1;
 
 -- name: ListFriendsAvailableEventIDs :many
 SELECT DISTINCT e.id

@@ -44,6 +44,28 @@ export const getAllCourses = (): Promise<Course[]> => {
     });
 };
 
+export const searchCourses = (query: string): Promise<Course[]> => {
+  return fetch(`${endpoints.courses}/search?q=${encodeURIComponent(query)}`, {
+    headers: authHeaders()
+  })
+    .then(resp => {
+      if (!resp.ok) throw new Error('Failed to search courses');
+      return resp.json();
+    });
+};
+
+export const findOrCreateCourse = (course: Omit<Course, 'id'>): Promise<Course> => {
+  return fetch(endpoints.courses, {
+    method: 'POST',
+    body: JSON.stringify(course),
+    headers: authHeaders()
+  })
+    .then(resp => {
+      if (!resp.ok) throw new Error('Failed to save course');
+      return resp.json();
+    });
+};
+
 export const getAllEvents = (playerId: number): Promise<Event[]> => {
   return fetch(`${endpoints.players}/${playerId}/events`)
     .then(resp => {
@@ -128,6 +150,38 @@ export const joinEvent = (playerId: number, eventId: number): Promise<Event[]> =
   .then(() => getAllEvents(playerId));
 };
 
+export const updateEvent = (
+  eventId: number,
+  courseId: number,
+  date: string,
+  teeTime: string,
+  openSpots: string,
+  numHoles: string,
+  isPrivate: boolean,
+  invitees: number[] = [],
+): Promise<Event> => {
+  return fetch(`${endpoints.singleEvent}/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      course_id: String(courseId),
+      date: date,
+      tee_time: teeTime,
+      open_spots: openSpots,
+      number_of_holes: numHoles,
+      private: isPrivate,
+      invitees: invitees,
+    }),
+    headers: authHeaders()
+  })
+  .then(resp => {
+    if (resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Failed to update event');
+    }
+  });
+};
+
 export const deleteEvent = (eventId: number, playerId: number): Promise<Event[]> => {
   return fetch(`${endpoints.singleEvent}/${eventId}`, {
     method: 'DELETE',
@@ -209,11 +263,11 @@ export const createNewProfile = (
   });
 };
 
-export const validateStandardLogin = (email: string, password: string): Promise<LoginResponse | undefined> => {
+export const validateStandardLogin = (login: string, password: string): Promise<LoginResponse | undefined> => {
   return fetch(`${endpoints.sessions}`, {
     method: 'POST',
     body: JSON.stringify({
-      email: email,
+      login: login,
       password: password
     }),
     headers: { 'Content-Type': 'application/json' }

@@ -38,7 +38,7 @@ function PostResultMessage({ postError, refreshEvents }: PostResultMessageProps)
             <Text ta='center' fw={500}>
               Congrats, your tee time has been created!
             </Text>
-            <Button component={Link} to='/dashboard' color='forest'>
+            <Button component={Link} to='/dashboard' color='forest' onClick={refreshEvents}>
               Back to Dashboard
             </Button>
           </>

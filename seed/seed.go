@@ -11,7 +11,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/ericrabun/findfore-go/internal/auth"
-	"github.com/ericrabun/findfore-go/internal/store"
+	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 	defer db.Close()
 
 	ctx := context.Background()
-	q := store.New(db)
+	q := sqlcgen.New(db)
 
 	// Clean existing data in correct order
 	for _, table := range []string{"player_events", "friendships", "events", "courses", "players"} {
@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// Create players
-	players := []store.CreatePlayerParams{
+	players := []sqlcgen.CreatePlayerParams{
 		{Name: ns("Amy"), Phone: ns("2533597214"), Email: ns("jaharamclark@gmail.com"), Username: ns("username1"), PasswordDigest: ns(passwordHash)},
 		{Name: ns("Andrew"), Phone: ns("3197952720"), Email: ns("keegan.oshea9@gmail.com"), Username: ns("username2"), PasswordDigest: ns(passwordHash)},
 		{Name: ns("Amber"), Phone: ns("9999991236"), Email: ns("test3@test.com"), Username: ns("username3"), PasswordDigest: ns(passwordHash)},
@@ -90,7 +90,7 @@ func main() {
 	fmt.Println("Created 4 courses")
 
 	// Create events
-	events := []store.CreateEventParams{
+	events := []sqlcgen.CreateEventParams{
 		{CourseID: ni32(1), Date: ns("08-01-2021"), TeeTime: ns("13:20"), OpenSpots: ni32(3), NumberOfHoles: ns("9"), HostID: ni32(1), Private: nb(true)},
 		{CourseID: ni32(2), Date: ns("08-05-2021"), TeeTime: ns("14:20"), OpenSpots: ni32(4), NumberOfHoles: ns("18"), HostID: ni32(2), Private: nb(true)},
 		{CourseID: ni32(3), Date: ns("08-10-2021"), TeeTime: ns("15:20"), OpenSpots: ni32(2), NumberOfHoles: ns("9"), HostID: ni32(3), Private: nb(false)},
@@ -112,7 +112,7 @@ func main() {
 	}
 
 	for _, f := range friendships {
-		_, err := q.CreateFriendship(ctx, store.CreateFriendshipParams{
+		_, err := q.CreateFriendship(ctx, sqlcgen.CreateFriendshipParams{
 			FollowerID: sql.NullInt32{Int32: f[0], Valid: true},
 			FolloweeID: sql.NullInt32{Int32: f[1], Valid: true},
 		})
@@ -134,7 +134,7 @@ func main() {
 	}
 
 	for _, pe := range playerEvents {
-		_, err := q.CreatePlayerEvent(ctx, store.CreatePlayerEventParams{
+		_, err := q.CreatePlayerEvent(ctx, sqlcgen.CreatePlayerEventParams{
 			PlayerID:     sql.NullInt64{Int64: pe.playerID, Valid: true},
 			EventID:      sql.NullInt64{Int64: pe.eventID, Valid: true},
 			InviteStatus: sql.NullInt32{Int32: pe.status, Valid: true},

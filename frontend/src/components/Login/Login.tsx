@@ -4,13 +4,13 @@ import { Paper, TextInput, PasswordInput, Button, Title, Stack, Text, Center, Bo
 import { GiGolfTee } from 'react-icons/gi';
 
 interface LoginProps {
-  validateLogin: (email: string, password: string) => void;
+  validateLogin: (login: string, password: string) => void;
   loginError?: string;
   clearLoginError?: () => void;
 }
 
 function Login({ validateLogin, loginError, clearLoginError }: LoginProps) {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
 
   return (
@@ -36,16 +36,15 @@ function Login({ validateLogin, loginError, clearLoginError }: LoginProps) {
               </Text>
             )}
             <TextInput
-              label='Email'
-              type='email'
-              id='email'
-              name='email'
-              value={email}
+              label='Email or Username'
+              id='login'
+              name='login'
+              value={login}
               onChange={(e) => {
                 if (loginError) {
                   clearLoginError?.();
                 }
-                setEmail(e.target.value);
+                setLogin(e.target.value);
               }}
               required
             />
@@ -66,7 +65,7 @@ function Login({ validateLogin, loginError, clearLoginError }: LoginProps) {
               color='forest'
               size='md'
               fullWidth
-              onClick={() => validateLogin(email, password)}
+              onClick={() => validateLogin(login, password)}
               className='form-submit'
               mt='sm'
             >

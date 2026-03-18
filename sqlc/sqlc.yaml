@@ -5,5 +5,5 @@ sql:
     schema: "../migrations/"
     gen:
       go:
-        package: "store"
-        out: "../internal/store"
+        package: "sqlcgen"
+        out: "../internal/adapter/outbound/postgres/sqlcgen"
