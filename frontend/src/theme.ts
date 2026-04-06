@@ -1,4 +1,4 @@
-import { createTheme, MantineThemeOverride, MantineColorsTuple } from '@mantine/core';
+import { createTheme, MantineThemeOverride, MantineColorsTuple, CSSVariablesResolver } from '@mantine/core';
 
 const forest: MantineColorsTuple = [
   '#e9f5ec',
@@ -38,6 +38,32 @@ const sage: MantineColorsTuple = [
   '#3f6a4e',
   '#335740',
 ];
+
+export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
+  variables: {},
+  light: {
+    '--ff-bg': theme.colors.sand[0],
+    '--ff-header-bg': theme.colors.forest[9],
+    '--ff-accent': theme.colors.sand[5],
+    '--ff-icon-primary': theme.colors.forest[6],
+    '--ff-border': theme.colors.sand[2],
+    '--ff-heading': theme.colors.forest[9],
+    '--ff-label': theme.colors.forest[8],
+    '--ff-link': theme.colors.forest[6],
+    '--ff-stat': theme.colors.forest[6],
+  },
+  dark: {
+    '--ff-bg': 'var(--mantine-color-dark-7)',
+    '--ff-header-bg': 'var(--mantine-color-dark-8)',
+    '--ff-accent': theme.colors.sand[5],
+    '--ff-icon-primary': theme.colors.forest[4],
+    '--ff-border': 'var(--mantine-color-dark-4)',
+    '--ff-heading': theme.colors.forest[3],
+    '--ff-label': theme.colors.forest[3],
+    '--ff-link': theme.colors.forest[3],
+    '--ff-stat': theme.colors.forest[3],
+  },
+});
 
 const theme: MantineThemeOverride = createTheme({
   primaryColor: 'forest',

@@ -18,10 +18,10 @@ function Login({ validateLogin, loginError, clearLoginError }: LoginProps) {
       <Paper shadow='lg' p='xl' maw={420} w='100%'>
         <form onSubmit={(e) => e.preventDefault()}>
           <Stack align='center' gap='xs' mb='xl'>
-            <Box c='forest.6' style={{ fontSize: '2.5rem' }}>
+            <Box style={{ color: 'var(--ff-link)', fontSize: '2.5rem' }}>
               <GiGolfTee />
             </Box>
-            <Title order={2} ta='center' c='forest.9'>
+            <Title order={2} ta='center' style={{ color: 'var(--ff-heading)' }}>
               Welcome back
             </Title>
             <Text c='dimmed' size='sm'>
@@ -75,7 +75,7 @@ function Login({ validateLogin, loginError, clearLoginError }: LoginProps) {
 
           <Text ta='center' size='sm' c='dimmed' mt='lg'>
             Don't have an account?{' '}
-            <Text component={Link} to='/create-profile' c='forest.6' fw={600} inherit style={{ textDecoration: 'none' }}>
+            <Text component={Link} to='/create-profile' style={{ color: 'var(--ff-link)', textDecoration: 'none' }} fw={600} inherit>
               Create one
             </Text>
           </Text>

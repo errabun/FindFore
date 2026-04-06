@@ -10,6 +10,8 @@ type PlayerService interface {
 	List(ctx context.Context) ([]entity.PlayerWithDetails, error)
 	GetWithDetails(ctx context.Context, id int64) (*entity.PlayerWithDetails, error)
 	Create(ctx context.Context, name, phone, email, username, password, passwordConfirmation string) (*entity.Player, error)
+	Update(ctx context.Context, callerID int64, name, phone, email, username string) (*entity.PlayerWithDetails, error)
+	ChangePassword(ctx context.Context, callerID int64, currentPassword, newPassword, passwordConfirmation string) error
 }
 
 type SessionService interface {

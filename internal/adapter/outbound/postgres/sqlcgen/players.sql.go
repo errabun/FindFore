@@ -136,6 +136,19 @@ func (q *Queries) GetPlayerByUsername(ctx context.Context, username sql.NullStri
 	return i, err
 }
 
+const getPlayerPasswordByID = `-- name: GetPlayerPasswordByID :one
+SELECT password_digest
+FROM players
+WHERE id = $1
+`
+
+func (q *Queries) GetPlayerPasswordByID(ctx context.Context, id int64) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getPlayerPasswordByID, id)
+	var password_digest sql.NullString
+	err := row.Scan(&password_digest)
+	return password_digest, err
+}
+
 const listPlayers = `-- name: ListPlayers :many
 SELECT id, name, phone, email, username
 FROM players
@@ -177,4 +190,62 @@ func (q *Queries) ListPlayers(ctx context.Context) ([]ListPlayersRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePlayer = `-- name: UpdatePlayer :one
+UPDATE players
+SET name = $2, phone = $3, email = $4, username = $5, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, phone, email, username
+`
+
+type UpdatePlayerParams struct {
+	ID       int64
+	Name     sql.NullString
+	Phone    sql.NullString
+	Email    sql.NullString
+	Username sql.NullString
+}
+
+type UpdatePlayerRow struct {
+	ID       int64
+	Name     sql.NullString
+	Phone    sql.NullString
+	Email    sql.NullString
+	Username sql.NullString
+}
+
+func (q *Queries) UpdatePlayer(ctx context.Context, arg UpdatePlayerParams) (UpdatePlayerRow, error) {
+	row := q.db.QueryRowContext(ctx, updatePlayer,
+		arg.ID,
+		arg.Name,
+		arg.Phone,
+		arg.Email,
+		arg.Username,
+	)
+	var i UpdatePlayerRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Phone,
+		&i.Email,
+		&i.Username,
+	)
+	return i, err
+}
+
+const updatePlayerPassword = `-- name: UpdatePlayerPassword :exec
+UPDATE players
+SET password_digest = $2, updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdatePlayerPasswordParams struct {
+	ID             int64
+	PasswordDigest sql.NullString
+}
+
+func (q *Queries) UpdatePlayerPassword(ctx context.Context, arg UpdatePlayerPasswordParams) error {
+	_, err := q.db.ExecContext(ctx, updatePlayerPassword, arg.ID, arg.PasswordDigest)
+	return err
 }

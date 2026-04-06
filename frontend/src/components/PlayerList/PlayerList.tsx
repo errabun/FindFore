@@ -37,10 +37,10 @@ const PlayerList = ({ screenWidth, players, friends, handleFriends, userId }: Pl
         padding: isDesktop ? '1.5rem' : '2rem',
         height: isDesktop ? '100%' : '100vh',
         width: isDesktop ? 320 : '100%',
-        backgroundColor: '#fdfbf7',
+        backgroundColor: 'var(--ff-bg)',
         display: 'flex',
         flexDirection: 'column',
-        borderRight: isDesktop ? '1px solid var(--mantine-color-sand-2)' : 'none',
+        borderRight: isDesktop ? '1px solid var(--ff-border)' : 'none',
         overflowY: 'auto',
       }}
     >

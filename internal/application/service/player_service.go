@@ -118,3 +118,68 @@ func (s *PlayerService) Create(ctx context.Context, name, phone, email, username
 
 	return player, nil
 }
+
+func (s *PlayerService) Update(ctx context.Context, callerID int64, name, phone, email, username string) (*entity.PlayerWithDetails, error) {
+	email = strings.ToLower(email)
+
+	if name == "" {
+		return nil, &ValidationError{Message: "Name can't be blank"}
+	}
+	if phone == "" {
+		return nil, &ValidationError{Message: "Phone can't be blank"}
+	}
+	if email == "" {
+		return nil, &ValidationError{Message: "Email can't be blank"}
+	}
+	if !emailRegex.MatchString(email) {
+		return nil, &ValidationError{Message: "Email is invalid"}
+	}
+	if username == "" {
+		return nil, &ValidationError{Message: "Username can't be blank"}
+	}
+
+	_, err := s.players.Update(ctx, entity.Player{
+		ID:       callerID,
+		Name:     name,
+		Phone:    phone,
+		Email:    email,
+		Username: username,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("update player: %w", err)
+	}
+
+	return s.GetWithDetails(ctx, callerID)
+}
+
+func (s *PlayerService) ChangePassword(ctx context.Context, callerID int64, currentPassword, newPassword, passwordConfirmation string) error {
+	if currentPassword == "" {
+		return &ValidationError{Message: "Current password can't be blank"}
+	}
+	if newPassword == "" {
+		return &ValidationError{Message: "New password can't be blank"}
+	}
+	if newPassword != passwordConfirmation {
+		return &ValidationError{Message: "Password confirmation doesn't match"}
+	}
+
+	digest, err := s.players.GetPasswordByID(ctx, callerID)
+	if err != nil {
+		return fmt.Errorf("get password: %w", err)
+	}
+
+	if !auth.CheckPassword(currentPassword, digest) {
+		return &ValidationError{Message: "Current password is incorrect"}
+	}
+
+	hash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	if err := s.players.UpdatePassword(ctx, callerID, hash); err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	return nil
+}

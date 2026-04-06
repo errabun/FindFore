@@ -98,6 +98,41 @@ func (r *PlayerRepo) Create(ctx context.Context, p entity.Player) (*entity.Playe
 	}, nil
 }
 
+func (r *PlayerRepo) Update(ctx context.Context, p entity.Player) (*entity.Player, error) {
+	row, err := r.q.UpdatePlayer(ctx, sqlcgen.UpdatePlayerParams{
+		ID:       p.ID,
+		Name:     sql.NullString{String: p.Name, Valid: true},
+		Phone:    sql.NullString{String: p.Phone, Valid: true},
+		Email:    sql.NullString{String: p.Email, Valid: true},
+		Username: sql.NullString{String: p.Username, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &entity.Player{
+		ID:       row.ID,
+		Name:     row.Name.String,
+		Phone:    row.Phone.String,
+		Email:    row.Email.String,
+		Username: row.Username.String,
+	}, nil
+}
+
+func (r *PlayerRepo) GetPasswordByID(ctx context.Context, id int64) (string, error) {
+	digest, err := r.q.GetPlayerPasswordByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return digest.String, nil
+}
+
+func (r *PlayerRepo) UpdatePassword(ctx context.Context, id int64, passwordDigest string) error {
+	return r.q.UpdatePlayerPassword(ctx, sqlcgen.UpdatePlayerPasswordParams{
+		ID:             id,
+		PasswordDigest: sql.NullString{String: passwordDigest, Valid: true},
+	})
+}
+
 func (r *PlayerRepo) ListIDsExcept(ctx context.Context, excludeID int64) ([]int64, error) {
 	return r.q.ListPlayersExceptHost(ctx, excludeID)
 }

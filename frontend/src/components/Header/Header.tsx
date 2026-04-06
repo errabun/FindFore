@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Burger, Anchor, Group, Drawer, Stack, UnstyledButton, Button } from '@mantine/core';
 import { GiGolfTee } from 'react-icons/gi';
-import { FiLogOut } from 'react-icons/fi';
+import { FiLogOut, FiUser } from 'react-icons/fi';
 
 interface HeaderProps {
   screenWidth: number;
@@ -24,10 +24,10 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
   const isActive = (path: string) => location.pathname === path;
 
   const navLinkStyle = (path: string): React.CSSProperties => ({
-    color: '#fff',
+    color: 'var(--mantine-color-white)',
     fontSize: '1.1rem',
     fontWeight: 500,
-    borderBottom: isActive(path) ? '2px solid #c4a876' : '2px solid transparent',
+    borderBottom: isActive(path) ? '2px solid var(--ff-accent)' : '2px solid transparent',
     height: 64,
     display: 'flex',
     alignItems: 'center',
@@ -36,7 +36,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
   });
 
   const mobileLinkStyle: React.CSSProperties = {
-    color: '#fff',
+    color: 'var(--mantine-color-white)',
     fontSize: '1.25rem',
     fontWeight: 500,
     textDecoration: 'none',
@@ -46,7 +46,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
   return (
     <header
       style={{
-        background: '#1a3c1a',
+        background: 'var(--ff-header-bg)',
         height: 64,
         width: '100%',
         display: 'flex',
@@ -88,7 +88,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
           onClick={() => setMobileNav(false)}
           underline='never'
           style={{
-            color: '#fff',
+            color: 'var(--mantine-color-white)',
             fontSize: screenWidth <= 489 ? '1.4rem' : screenWidth <= 960 ? '1.6rem' : '1.8rem',
             fontWeight: 700,
             display: 'flex',
@@ -98,7 +98,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
             letterSpacing: '-0.02em',
           }}
         >
-          <GiGolfTee data-cy='logo' style={{ color: '#c4a876', fontSize: '1.4em' }} />
+          <GiGolfTee data-cy='logo' style={{ color: 'var(--ff-accent)', fontSize: '1.4em' }} />
           ForeFinder
         </Anchor>
 
@@ -123,22 +123,34 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
               Create Tee Time
             </Anchor>
             {isLoggedIn && (
-              <Button
-                variant='subtle'
-                color='sand'
-                size='sm'
-                leftSection={<FiLogOut size={16} />}
-                onClick={handleLogout}
-                data-cy='logout-btn'
-                styles={{
-                  root: {
-                    color: '#c4a876',
-                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                  },
-                }}
-              >
-                Log Out
-              </Button>
+              <>
+                <Anchor
+                  component={Link}
+                  to='/profile'
+                  data-cy='profile-link'
+                  underline='never'
+                  style={navLinkStyle('/profile')}
+                >
+                  <FiUser size={16} style={{ marginRight: 6 }} />
+                  Profile
+                </Anchor>
+                <Button
+                  variant='subtle'
+                  color='sand'
+                  size='sm'
+                  leftSection={<FiLogOut size={16} />}
+                  onClick={handleLogout}
+                  data-cy='logout-btn'
+                  styles={{
+                    root: {
+                      color: 'var(--ff-accent)',
+                      '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                    },
+                  }}
+                >
+                  Log Out
+                </Button>
+              </>
             )}
           </Group>
         ) : (
@@ -152,7 +164,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
             overlayProps={{ backgroundOpacity: 0.4 }}
             styles={{
               content: {
-                background: '#1a3c1a',
+                background: 'var(--ff-header-bg)',
               },
               body: {
                 padding: '2rem 1.5rem',
@@ -190,23 +202,40 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
                 </UnstyledButton>
               )}
               {isLoggedIn && (
-                <UnstyledButton
-                  data-cy='logout-btn'
-                  onClick={handleLogout}
-                  style={{
-                    ...mobileLinkStyle,
-                    color: '#c4a876',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginTop: '1rem',
-                    borderTop: '1px solid rgba(255,255,255,0.1)',
-                    paddingTop: '1.5rem',
-                  }}
-                >
-                  <FiLogOut size={18} />
-                  Log Out
-                </UnstyledButton>
+                <>
+                  <UnstyledButton
+                    component={Link}
+                    to='/profile'
+                    data-cy='profile-link'
+                    onClick={() => setMobileNav(false)}
+                    style={{
+                      ...mobileLinkStyle,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <FiUser size={18} />
+                    Profile
+                  </UnstyledButton>
+                  <UnstyledButton
+                    data-cy='logout-btn'
+                    onClick={handleLogout}
+                    style={{
+                      ...mobileLinkStyle,
+                      color: 'var(--ff-accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginTop: '1rem',
+                      borderTop: '1px solid rgba(255,255,255,0.1)',
+                      paddingTop: '1.5rem',
+                    }}
+                  >
+                    <FiLogOut size={18} />
+                    Log Out
+                  </UnstyledButton>
+                </>
               )}
             </Stack>
           </Drawer>

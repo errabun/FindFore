@@ -2,7 +2,7 @@
   --ff-header-height: 64px;
   --ff-sidebar-width: 320px;
   --ff-transition: 0.2s ease;
-  --ff-bg: #fdfbf7;
+  --ff-bg: var(--mantine-color-body);
 }
 
 html {

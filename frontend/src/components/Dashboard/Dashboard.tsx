@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Tabs, SimpleGrid, Paper, Text, Title, Group, Box } from '@mantine/core';
 import { FiCalendar, FiMail, FiUsers } from 'react-icons/fi';
 import PlayerList from '../PlayerList/PlayerList';
 import TeeTimeContainer from '../TeeTimeContainer/TeeTimeContainer';
 import Newsfeed from '../Newsfeed/Newsfeed';
+import { filterCommitted, filterAvailable } from '../../domain/teeTime/teeTimeService';
 import type { Event, Friend, Player, HandleFriends, HandleInviteAction } from '../../types';
 
 interface DashboardProps {
@@ -29,39 +30,10 @@ const Dashboard = ({
   players,
   handleFriends,
 }: DashboardProps) => {
-  const [availableTeeTimes, setAvailableTeeTimes] = useState<Event[]>([]);
-  const [committedTeeTimes, setCommittedTeeTimes] = useState<Event[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>('committed');
 
-  const getAvailable = useCallback(() => {
-    return events.filter((event) => {
-      if (
-        event.declined.includes(currentUserId) ||
-        event.accepted.includes(currentUserId) ||
-        event.closed.includes(currentUserId)
-      ) {
-        return false;
-      } else if (
-        event.pending.includes(currentUserId) ||
-        !event.private
-      ) {
-        return true;
-      }
-
-      return false;
-    });
-  }, [events, currentUserId]);
-
-  const getCommitted = useCallback(() => {
-    return events.filter((event) =>
-      event.accepted.includes(currentUserId)
-    );
-  }, [events, currentUserId]);
-
-  useEffect(() => {
-    setAvailableTeeTimes(getAvailable());
-    setCommittedTeeTimes(getCommitted());
-  }, [events, getAvailable, getCommitted]);
+  const committedTeeTimes = filterCommitted(events, currentUserId);
+  const availableTeeTimes = filterAvailable(events, currentUserId);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -87,7 +59,7 @@ const Dashboard = ({
       <Box style={{ flex: 1, overflow: 'auto' }} p={{ base: 'md', sm: 'xl' }}>
         {firstName && (
           <Box mb='lg'>
-            <Title order={2} c='forest.9' fw={700}>
+            <Title order={2} style={{ color: 'var(--ff-heading)' }} fw={700}>
               {getGreeting()}, {firstName}
             </Title>
             <Text c='dimmed' size='sm' mt={4}>
@@ -99,28 +71,28 @@ const Dashboard = ({
         <SimpleGrid cols={{ base: 2, sm: 3 }} mb='xl' spacing='md'>
           <Paper p='md' shadow='xs'>
             <Group gap='xs' mb={4}>
-              <FiCalendar style={{ color: '#2E5A2E' }} />
+              <FiCalendar style={{ color: 'var(--ff-icon-primary)' }} />
               <Text size='xs' c='dimmed' fw={500}>Upcoming Rounds</Text>
             </Group>
-            <Text size='xl' fw={700} c='forest.6'>
+            <Text size='xl' fw={700} style={{ color: 'var(--ff-stat)' }}>
               {committedTeeTimes.length}
             </Text>
           </Paper>
           <Paper p='md' shadow='xs'>
             <Group gap='xs' mb={4}>
-              <FiMail style={{ color: '#2E5A2E' }} />
+              <FiMail style={{ color: 'var(--ff-icon-primary)' }} />
               <Text size='xs' c='dimmed' fw={500}>Available Invites</Text>
             </Group>
-            <Text size='xl' fw={700} c='forest.6'>
+            <Text size='xl' fw={700} style={{ color: 'var(--ff-stat)' }}>
               {availableTeeTimes.length}
             </Text>
           </Paper>
           <Paper p='md' shadow='xs'>
             <Group gap='xs' mb={4}>
-              <FiUsers style={{ color: '#2E5A2E' }} />
+              <FiUsers style={{ color: 'var(--ff-icon-primary)' }} />
               <Text size='xs' c='dimmed' fw={500}>Friends</Text>
             </Group>
-            <Text size='xl' fw={700} c='forest.6'>
+            <Text size='xl' fw={700} style={{ color: 'var(--ff-stat)' }}>
               {friends.length}
             </Text>
           </Paper>

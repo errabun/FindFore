@@ -28,6 +28,8 @@ func NewRouter(h *Handler, jwtSecret string) *chi.Mux {
 
 		r.Get("/players", h.ListPlayers)
 		r.Post("/players", h.CreatePlayer)
+		r.Patch("/players/{player_id}", h.UpdatePlayer)
+		r.Patch("/players/{player_id}/password", h.ChangePassword)
 		r.Get("/players/{player_id}/events", h.ListEvents)
 		r.Get("/players/{player_id}/friends-events", h.ListFriendsEvents)
 

@@ -78,7 +78,7 @@ const TeeTimeContainer = ({
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        border: '1px solid var(--mantine-color-sand-2)',
+        border: '1px solid var(--ff-border)',
       }}
     >
       <Group
@@ -87,11 +87,11 @@ const TeeTimeContainer = ({
         px='md'
         py='sm'
         style={{
-          borderBottom: '1px solid var(--mantine-color-sand-2)',
+          borderBottom: '1px solid var(--ff-border)',
         }}
       >
         <Group gap='sm'>
-          <Title order={4} fw={600} c='forest.9'>
+          <Title order={4} fw={600} style={{ color: 'var(--ff-heading)' }}>
             {title}
           </Title>
           <Badge size='sm' variant='light' color='forest'>

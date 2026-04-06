@@ -28,7 +28,7 @@ const ReplySection = ({ replies, currentUserId, onCreateReply, onDeleteReply, de
   return (
     <Stack gap='xs'>
       {visibleReplies.length > 0 && (
-        <Stack gap='xs' pl='sm' style={{ borderLeft: '2px solid var(--mantine-color-sand-2)' }}>
+        <Stack gap='xs' pl='sm' style={{ borderLeft: '2px solid var(--ff-border)' }}>
           {visibleReplies.map((reply) => (
             <Group key={reply.id} gap='xs' align='flex-start' wrap='nowrap'>
               <Avatar size='xs' radius='xl' color='forest' mt={2}>
@@ -36,7 +36,7 @@ const ReplySection = ({ replies, currentUserId, onCreateReply, onDeleteReply, de
               </Avatar>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Group gap='xs'>
-                  <Text size='xs' fw={600} c='forest.8'>{reply.player_name}</Text>
+                  <Text size='xs' fw={600} style={{ color: 'var(--ff-label)' }}>{reply.player_name}</Text>
                   <Text size='xs' c='dimmed'>{dayjs(reply.created_at).format('MMM D, h:mm A')}</Text>
                 </Group>
                 <Text size='sm'>{reply.body}</Text>
@@ -51,7 +51,7 @@ const ReplySection = ({ replies, currentUserId, onCreateReply, onDeleteReply, de
 
           {!showAll && hiddenCount > 0 && (
             <UnstyledButton onClick={() => setShowAll(true)}>
-              <Text size='xs' c='forest.6' fw={500}>
+              <Text size='xs' style={{ color: 'var(--ff-link)' }} fw={500}>
                 View {hiddenCount} more {hiddenCount === 1 ? 'reply' : 'replies'}
               </Text>
             </UnstyledButton>

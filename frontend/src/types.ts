@@ -1,89 +1,17 @@
-export interface Player {
-  id: number;
-  name: string;
-  phone: string;
-  email: string;
-  username: string;
-  friends: number[];
-  events: number[];
-}
+// Domain type re-exports (components keep importing from here)
+export type { Player, LoginResponse, UpdateProfileRequest, ChangePasswordRequest } from './domain/auth/types';
+export type { Event } from './domain/teeTime/types';
+export type { Course } from './domain/course/types';
+export type { Friend, Post, Reaction, Reply } from './domain/social/types';
 
-export interface Course {
-  id: number;
-  name: string;
-  street: string;
-  city: string;
-  state: string;
-  zip_code: string;
-  phone: string;
-  cost: string;
-}
-
-export interface Event {
-  id: number;
-  course_name: string;
-  date: string;
-  tee_time: string;
-  open_spots: number;
-  number_of_holes: string;
-  private: boolean;
-  host_name: string;
-  host_id: number;
-  accepted: number[];
-  declined: number[];
-  pending: number[];
-  closed: number[];
-  remaining_spots: number;
-}
-
-export interface LoginResponse {
-  id: number;
-  name: string;
-  phone: string;
-  email: string;
-  username: string;
-  friends: number[];
-  events: number[];
-  token: string;
-}
-
-export interface Friend {
-  id: number;
-  name: string;
-}
-
-export interface Reaction {
-  id: number;
-  player_id: number;
-  player_name: string;
-  emoji: string;
-}
-
-export interface Reply {
-  id: number;
-  player_id: number;
-  player_name: string;
-  body: string;
-  created_at: string;
-}
-
-export interface Post {
-  id: number;
-  player_id: number;
-  player_name: string;
-  body: string;
-  created_at: string;
-  reactions: Reaction[];
-  replies: Reply[];
-}
-
+// UI-specific handler interfaces (component prop contracts, not domain)
 export interface HandleFriends {
-  add: (friend: Friend) => void;
-  remove: (friend: Friend) => void;
+  add: (friend: import('./domain/social/types').Friend) => void;
+  remove: (friend: import('./domain/social/types').Friend) => void;
 }
 
 export interface HandleInviteAction {
   update: (eventId: number, status: string) => void;
-  cancel: (event: Event) => void;
+  cancel: (event: import('./domain/teeTime/types').Event) => void;
   join: (eventId: number) => void;
 }

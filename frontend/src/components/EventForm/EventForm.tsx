@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { postEvent, searchCourses, findOrCreateCourse } from '../../APICalls/APICalls';
+import { courseAdapter } from '../../adapters/api/courseAdapter';
+import { teeTimeAdapter } from '../../adapters/api/teeTimeAdapter';
 import PostResultMessage from './PostResultMessage';
 import {
   Paper,
@@ -29,9 +30,9 @@ interface EventFormProps {
 }
 
 function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
-  const tomorrow = dayjs().add(1, 'day').toDate();
+  const tomorrowDate = dayjs().add(1, 'day');
 
-  const [date, setDate] = useState<Date | null>(tomorrow);
+  const [date, setDate] = useState<string | null>(tomorrowDate.format('YYYY-MM-DD'));
   const [teeTime, setTeeTime] = useState('');
   const [openSpots, setOpenSpots] = useState<string | null>('2');
   const [selectedFriends, setSelectedFriends] = useState<number[]>([]);
@@ -72,7 +73,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
 
     debounceRef.current = setTimeout(() => {
       setSearching(true);
-      searchCourses(value)
+      courseAdapter.search(value)
         .then((results) => setCourseResults(results))
         .catch(() => setCourseResults([]))
         .finally(() => setSearching(false));
@@ -115,7 +116,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
 
     setPostAttempt(true);
     try {
-      const saved = await findOrCreateCourse({
+      const saved = await courseAdapter.findOrCreate({
         name: selectedCourse.name,
         street: selectedCourse.street,
         city: selectedCourse.city,
@@ -126,7 +127,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
       });
 
       const formattedDate = dayjs(date).format('YYYY-MM-DD');
-      await postEvent(
+      await teeTimeAdapter.createEvent(
         String(saved.id),
         formattedDate,
         teeTime,
@@ -150,7 +151,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
         <Paper shadow='lg' p='xl' maw={520} w='100%'>
           <form onSubmit={(e) => e.preventDefault()}>
             <Box mb='xl'>
-              <Title order={2} c='forest.9' ta='center'>
+              <Title order={2} style={{ color: 'var(--ff-heading)' }} ta='center'>
                 Create a Tee Time
               </Title>
               <Text c='dimmed' size='sm' ta='center' mt={4}>
@@ -160,13 +161,13 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
 
             <Stack gap='lg'>
               <Box>
-                <Text fw={600} size='sm' c='forest.8' mb='xs'>When</Text>
+                <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>When</Text>
                 <Stack gap='sm'>
                   <DateInput
                     label='Date'
                     value={date}
                     onChange={setDate}
-                    minDate={tomorrow}
+                    minDate={tomorrowDate.toDate()}
                     required
                   />
                   <TimeInput
@@ -179,7 +180,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
               </Box>
 
               <Box>
-                <Text fw={600} size='sm' c='forest.8' mb='xs'>Details</Text>
+                <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>Details</Text>
                 <Stack gap='sm'>
                   <Autocomplete
                     label='Golf Course'
@@ -229,7 +230,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
 
               {isPrivate && (
                 <Box>
-                  <Text fw={600} size='sm' c='forest.8' mb='xs'>Invite Friends</Text>
+                  <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>Invite Friends</Text>
                   <Stack gap='sm'>
                     {!friends.length && (
                       <Text fs='italic' c='dimmed' size='sm'>

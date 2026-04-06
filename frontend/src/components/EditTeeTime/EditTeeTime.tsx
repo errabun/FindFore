@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { updateEvent, searchCourses, findOrCreateCourse } from '../../APICalls/APICalls';
+import { courseAdapter } from '../../adapters/api/courseAdapter';
+import { teeTimeAdapter } from '../../adapters/api/teeTimeAdapter';
 import {
   Paper,
   Select,
@@ -29,9 +30,9 @@ interface EditTeeTimeProps {
 
 function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
   const navigate = useNavigate();
-  const tomorrow = dayjs().add(1, 'day').toDate();
+  const tomorrowDate = dayjs().add(1, 'day');
 
-  const [date, setDate] = useState<Date | null>(dayjs(event.date).toDate());
+  const [date, setDate] = useState<string | null>(dayjs(event.date).format('YYYY-MM-DD'));
   const [teeTime, setTeeTime] = useState(event.tee_time);
   const [openSpots, setOpenSpots] = useState<string | null>(String(event.open_spots));
   const [numHoles, setNumHoles] = useState(event.number_of_holes);
@@ -108,7 +109,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
 
     debounceRef.current = setTimeout(() => {
       setSearching(true);
-      searchCourses(value)
+      courseAdapter.search(value)
         .then((results) => setCourseResults(results))
         .catch(() => setCourseResults([]))
         .finally(() => setSearching(false));
@@ -136,7 +137,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
 
       // If a new course was selected from search (id=0), save it first
       if (!courseId) {
-        const saved = await findOrCreateCourse({
+        const saved = await courseAdapter.findOrCreate({
           name: selectedCourse.name,
           street: selectedCourse.street,
           city: selectedCourse.city,
@@ -149,7 +150,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
       }
 
       const formattedDate = dayjs(date).format('YYYY-MM-DD');
-      await updateEvent(
+      await teeTimeAdapter.updateEvent(
         event.id,
         courseId,
         formattedDate,
@@ -175,7 +176,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
       <Paper shadow='lg' p='xl' maw={520} w='100%'>
         <form onSubmit={(e) => e.preventDefault()}>
           <Box mb='xl'>
-            <Title order={2} c='forest.9' ta='center'>
+            <Title order={2} style={{ color: 'var(--ff-heading)' }} ta='center'>
               Edit Tee Time
             </Title>
             <Text c='dimmed' size='sm' ta='center' mt={4}>
@@ -185,13 +186,13 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
 
           <Stack gap='lg'>
             <Box>
-              <Text fw={600} size='sm' c='forest.8' mb='xs'>When</Text>
+              <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>When</Text>
               <Stack gap='sm'>
                 <DateInput
                   label='Date'
                   value={date}
                   onChange={setDate}
-                  minDate={tomorrow}
+                  minDate={tomorrowDate.toDate()}
                   required
                 />
                 <TimeInput
@@ -204,7 +205,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
             </Box>
 
             <Box>
-              <Text fw={600} size='sm' c='forest.8' mb='xs'>Details</Text>
+              <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>Details</Text>
               <Stack gap='sm'>
                 <Autocomplete
                   label='Golf Course'
@@ -254,7 +255,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
 
             {isPrivate && (
               <Box>
-                <Text fw={600} size='sm' c='forest.8' mb='xs'>Invite Friends</Text>
+                <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>Invite Friends</Text>
                 <Stack gap='sm'>
                   {!uninvitedFriends.length && (
                     <Text fs='italic' c='dimmed' size='sm'>

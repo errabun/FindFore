@@ -12,6 +12,9 @@ type PlayerRepository interface {
 	GetByEmail(ctx context.Context, email string) (*entity.Player, error)
 	GetByUsername(ctx context.Context, username string) (*entity.Player, error)
 	Create(ctx context.Context, p entity.Player) (*entity.Player, error)
+	Update(ctx context.Context, p entity.Player) (*entity.Player, error)
+	GetPasswordByID(ctx context.Context, id int64) (string, error)
+	UpdatePassword(ctx context.Context, id int64, passwordDigest string) error
 	ListIDsExcept(ctx context.Context, excludeID int64) ([]int64, error)
 }
 

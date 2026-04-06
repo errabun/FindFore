@@ -2,6 +2,8 @@ import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { Card, Text, Button, Group } from '@mantine/core';
 import { FiCalendar, FiClock, FiUser, FiUsers, FiEdit2 } from 'react-icons/fi';
+import { formatTeeTime } from '../../domain/teeTime/formatters';
+import { isHost as checkIsHost } from '../../domain/teeTime/teeTimeService';
 import type { Event, HandleInviteAction } from '../../types';
 
 interface TeeTimeProps {
@@ -14,22 +16,8 @@ interface TeeTimeProps {
 const TeeTime = ({ type, event, handleInviteAction, currentUserId }: TeeTimeProps) => {
   const navigate = useNavigate();
 
-  const formatTime = (time: string) => {
-    let hours: string | number = time.split(':')[0];
-    const minutes = time.split(':')[1];
-    const period = parseInt(hours) > 11 ? 'PM' : 'AM';
-
-    if (parseInt(hours) < 10) {
-      hours = hours.slice(1, 2);
-    } else if (parseInt(hours) > 12) {
-      hours = parseInt(hours) - 12;
-    }
-
-    return `${hours}:${minutes} ${period}`;
-  };
-
   const filledSpots = event.open_spots - event.remaining_spots;
-  const isHost = currentUserId === event.host_id;
+  const isHost = currentUserId ? checkIsHost(event, currentUserId) : false;
 
   return (
     <Card
@@ -37,13 +25,13 @@ const TeeTime = ({ type, event, handleInviteAction, currentUserId }: TeeTimeProp
       shadow='xs'
       withBorder
       style={{
-        borderColor: 'var(--mantine-color-sand-2)',
+        borderColor: 'var(--ff-border)',
         cursor: type === 'committed' && isHost ? 'pointer' : undefined,
       }}
       p='md'
       onClick={type === 'committed' && isHost ? () => navigate(`/edit-tee-time/${event.id}`) : undefined}
     >
-      <Text fw={700} c='forest.9' size='md' mb='xs'>
+      <Text fw={700} style={{ color: 'var(--ff-heading)' }} size='md' mb='xs'>
         {event.course_name}
       </Text>
 
@@ -54,7 +42,7 @@ const TeeTime = ({ type, event, handleInviteAction, currentUserId }: TeeTimeProp
         </Group>
         <Group gap={6}>
           <FiClock size={14} style={{ color: 'var(--mantine-color-dimmed)' }} />
-          <Text size='sm' c='dimmed'>{formatTime(event.tee_time)}</Text>
+          <Text size='sm' c='dimmed'>{formatTeeTime(event.tee_time)}</Text>
         </Group>
       </Group>
 

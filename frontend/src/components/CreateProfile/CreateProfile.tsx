@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createNewProfile } from '../../APICalls/APICalls';
+import { authAdapter } from '../../adapters/api/authAdapter';
 import { Paper, TextInput, PasswordInput, Button, Title, Stack, Text, Center, Divider, Box } from '@mantine/core';
 import { GiGolfTee } from 'react-icons/gi';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +15,7 @@ function CreateProfile() {
 
   const submitProfile = () => {
     if (confirmSamePW()) {
-      createNewProfile(name, phone, email, userName, password, passwordConfirm)
+      authAdapter.createProfile(name, phone, email, userName, password, passwordConfirm)
         .then(() => navigate('/login', { replace: true }));
     } else {
       alert('Passwords do not match, please try again!');
@@ -31,10 +31,10 @@ function CreateProfile() {
       <Paper shadow='lg' p='xl' maw={420} w='100%'>
         <form onSubmit={(e) => e.preventDefault()}>
           <Stack align='center' gap='xs' mb='xl'>
-            <Box c='forest.6' style={{ fontSize: '2.5rem' }}>
+            <Box style={{ color: 'var(--ff-link)', fontSize: '2.5rem' }}>
               <GiGolfTee />
             </Box>
-            <Title order={2} ta='center' c='forest.9'>
+            <Title order={2} ta='center' style={{ color: 'var(--ff-heading)' }}>
               Create your profile
             </Title>
             <Text c='dimmed' size='sm'>
@@ -43,7 +43,7 @@ function CreateProfile() {
           </Stack>
 
           <Stack gap='md'>
-            <Text fw={600} size='sm' c='forest.8'>Personal Info</Text>
+            <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }}>Personal Info</Text>
             <TextInput
               label='Full Name'
               id='name'
@@ -76,7 +76,7 @@ function CreateProfile() {
 
             <Divider my='xs' color='sand.2' />
 
-            <Text fw={600} size='sm' c='forest.8'>Account</Text>
+            <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }}>Account</Text>
             <TextInput
               label='Username'
               id='userName'

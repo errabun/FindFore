@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
+	"github.com/go-chi/chi/v5"
+
+	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
 	"github.com/ericrabun/findfore-go/internal/application/service"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -82,4 +86,92 @@ func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusCreated, resp)
+}
+
+type updatePlayerRequest struct {
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+func (h *Handler) UpdatePlayer(w http.ResponseWriter, r *http.Request) {
+	callerID, ok := r.Context().Value(mw.PlayerIDKey).(int64)
+	if !ok || callerID == 0 {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
+	playerID, err := strconv.ParseInt(chi.URLParam(r, "player_id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "Invalid player ID")
+		return
+	}
+
+	if callerID != playerID {
+		respondError(w, http.StatusForbidden, "forbidden", "You can only update your own profile")
+		return
+	}
+
+	var req updatePlayerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
+		return
+	}
+
+	player, err := h.players.Update(r.Context(), callerID, req.Name, req.Phone, req.Email, req.Username)
+	if err != nil {
+		var ve *service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to update player")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, mapPlayerToResponse(*player))
+}
+
+type changePasswordRequest struct {
+	CurrentPassword      string `json:"current_password"`
+	NewPassword          string `json:"new_password"`
+	PasswordConfirmation string `json:"password_confirmation"`
+}
+
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	callerID, ok := r.Context().Value(mw.PlayerIDKey).(int64)
+	if !ok || callerID == 0 {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
+	playerID, err := strconv.ParseInt(chi.URLParam(r, "player_id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "Invalid player ID")
+		return
+	}
+
+	if callerID != playerID {
+		respondError(w, http.StatusForbidden, "forbidden", "You can only change your own password")
+		return
+	}
+
+	var req changePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
+		return
+	}
+
+	if err := h.players.ChangePassword(r.Context(), callerID, req.CurrentPassword, req.NewPassword, req.PasswordConfirmation); err != nil {
+		var ve *service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to change password")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
 }
