@@ -75,7 +75,7 @@ func NewRouter(h *Handler, jwtSecret string) *chi.Mux {
 }
 
 func frontendDistDir() string {
-	candidates := []string{"frontend/dist", "../frontend/dist"}
+	candidates := []string{"frontend/dist", "../frontend/dist", "/frontend/dist"}
 	for _, c := range candidates {
 		if info, err := os.Stat(c); err == nil && info.IsDir() {
 			return c

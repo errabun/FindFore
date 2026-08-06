@@ -16,9 +16,9 @@ type Config struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL is required")
+	dbURL, err := ResolveDatabaseURL()
+	if err != nil {
+		return nil, err
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -28,7 +28,7 @@ func Load() (*Config, error) {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3001"
+		port = "8080"
 	}
 
 	return &Config{

@@ -9,8 +9,11 @@ import (
 )
 
 func Connect(databaseURL string) (*sql.DB, error) {
-	// Heroku Postgres requires SSL but doesn't include sslmode in the URL
-	if !strings.Contains(databaseURL, "sslmode=") && !strings.Contains(databaseURL, "localhost") {
+	// Cloud SQL on Cloud Run uses a Unix socket and does not need sslmode.
+	// Remote TCP connections without sslmode still default to require.
+	if !strings.Contains(databaseURL, "sslmode=") &&
+		!strings.Contains(databaseURL, "localhost") &&
+		!strings.Contains(databaseURL, "/cloudsql/") {
 		if strings.Contains(databaseURL, "?") {
 			databaseURL += "&sslmode=require"
 		} else {

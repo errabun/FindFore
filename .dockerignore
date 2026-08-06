@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+**/.env
+**/.env.*
+frontend/node_modules
+frontend/dist
+**/__pycache__
+.claude
+.cursor
+*.md
+!migrations/**
+seed/
+frontend/cypress
+frontend/.circleci
