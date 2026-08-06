@@ -19,20 +19,18 @@ type golfCourseAPIResponse struct {
 	Courses []golfCourseResult `json:"courses"`
 }
 
+// Only fields we actively use are declared, so upstream type changes on unused
+// fields (id, country, latitude/longitude) can't break unmarshaling.
 type golfCourseResult struct {
-	ID         int                `json:"id"`
 	ClubName   string             `json:"club_name"`
 	CourseName string             `json:"course_name"`
 	Location   golfCourseLocation `json:"location"`
 }
 
 type golfCourseLocation struct {
-	Address   string  `json:"address"`
-	City      string  `json:"city"`
-	State     string  `json:"state"`
-	Country   string  `json:"country"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	Address string `json:"address"`
+	City    string `json:"city"`
+	State   string `json:"state"`
 }
 
 // Client implements port.GolfCourseSearcher by calling the Golf Course API.
