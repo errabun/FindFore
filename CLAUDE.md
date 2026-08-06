@@ -101,6 +101,7 @@ Organized by the four pillars defined in `VISION.md`:
 - **Secrets:** JWT, DB password, API keys in Secret Manager — never in the image or repo.
 - **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
 - **Domain:** `findfore.com` (registered via GoDaddy). Map to Cloud Run once the app is live (Cloud Run → Manage custom domains, then update GoDaddy DNS). Use `findfore.com` (or `www.findfore.com`) in CORS `ALLOWED_ORIGINS`, PWA manifest `start_url`, and share links once mapped.
+- **Cost hygiene:** Cloud Run scales to zero. Cloud SQL is scheduled via `scripts/gcp-sql-schedule.sh` (weekday 8am–8pm America/Denver). Storage + public IP still bill when stopped. Use `./scripts/gcp-sql-schedule.sh start|stop` for off-hours work.
 - Leverage Google services (Auth, Maps, etc.) where they provide good integration or cost benefits.
 
 ## 9. Collaboration & Prompting Rules for Claude
