@@ -30,6 +30,7 @@ function App() {
   return (
     <Router>
       <Header screenWidth={screenWidth} isLoggedIn={!!hostPlayer} onLogout={logout} />
+      <main className="ff-main-content">
       <Routes>
         <Route
           path='/login'
@@ -141,6 +142,7 @@ function App() {
         />
         <Route path='*' element={<Navigate to='/login' />} />
       </Routes>
+      </main>
     </Router>
   );
 }

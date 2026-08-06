@@ -17,8 +17,13 @@ body {
 
 #root {
   display: grid;
-  grid-template-rows: var(--ff-header-height) auto;
+  grid-template-rows: var(--ff-header-height) 1fr;
   height: 100%;
+  overflow: hidden;
+}
+
+.ff-main-content {
+  overflow-y: auto;
 }
 
 .ff-card-hover {

@@ -52,8 +52,6 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        position: 'sticky',
-        top: 0,
         zIndex: 999,
         borderBottom: '1px solid rgba(255,255,255,0.1)',
       }}
