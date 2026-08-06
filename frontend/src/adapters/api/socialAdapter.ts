@@ -46,38 +46,36 @@ export const newsfeedAdapter: NewsfeedPort = {
     return request<Post[]>(`${endpoints.posts}?limit=${limit}&offset=${offset}`);
   },
 
-  createPost(playerId: number, body: string): Promise<Post> {
+  createPost(body: string): Promise<Post> {
     return request<Post>(endpoints.posts, {
       method: 'POST',
-      body: JSON.stringify({ player_id: playerId, body }),
+      body: JSON.stringify({ body }),
     });
   },
 
-  deletePost(postId: number, playerId: number): Promise<void> {
+  deletePost(postId: number): Promise<void> {
     return requestVoid(`${endpoints.posts}/${postId}`, {
       method: 'DELETE',
-      body: JSON.stringify({ player_id: playerId }),
     });
   },
 
-  toggleReaction(postId: number, playerId: number, emoji: string): Promise<Reaction[]> {
+  toggleReaction(postId: number, emoji: string): Promise<Reaction[]> {
     return request<Reaction[]>(`${endpoints.posts}/${postId}/reactions`, {
       method: 'POST',
-      body: JSON.stringify({ player_id: playerId, emoji }),
+      body: JSON.stringify({ emoji }),
     });
   },
 
-  createReply(postId: number, playerId: number, body: string): Promise<Reply> {
+  createReply(postId: number, body: string): Promise<Reply> {
     return request<Reply>(`${endpoints.posts}/${postId}/replies`, {
       method: 'POST',
-      body: JSON.stringify({ player_id: playerId, body }),
+      body: JSON.stringify({ body }),
     });
   },
 
-  deleteReply(postId: number, replyId: number, playerId: number): Promise<void> {
+  deleteReply(postId: number, replyId: number): Promise<void> {
     return requestVoid(`${endpoints.posts}/${postId}/replies/${replyId}`, {
       method: 'DELETE',
-      body: JSON.stringify({ player_id: playerId }),
     });
   },
 };

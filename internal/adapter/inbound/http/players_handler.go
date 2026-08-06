@@ -33,6 +33,27 @@ func mapPlayerToResponse(p entity.PlayerWithDetails) PlayerResponse {
 	}
 }
 
+// mapPlayerToPublicResponse omits email/phone for community directory listings.
+func mapPlayerToPublicResponse(p entity.PlayerWithDetails) PlayerResponse {
+	friends := p.Friends
+	if friends == nil {
+		friends = []int64{}
+	}
+	events := p.Events
+	if events == nil {
+		events = []int64{}
+	}
+	return PlayerResponse{
+		ID:       p.ID,
+		Name:     p.Name,
+		Phone:    "",
+		Email:    "",
+		Username: p.Username,
+		Friends:  friends,
+		Events:   events,
+	}
+}
+
 func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 	players, err := h.players.List(r.Context())
 	if err != nil {
@@ -42,7 +63,7 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]PlayerResponse, len(players))
 	for i, p := range players {
-		resp[i] = mapPlayerToResponse(p)
+		resp[i] = mapPlayerToPublicResponse(p)
 	}
 
 	respondJSON(w, http.StatusOK, resp)
@@ -96,8 +117,8 @@ type updatePlayerRequest struct {
 }
 
 func (h *Handler) UpdatePlayer(w http.ResponseWriter, r *http.Request) {
-	callerID, ok := r.Context().Value(mw.PlayerIDKey).(int64)
-	if !ok || callerID == 0 {
+	callerID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
 		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
@@ -140,8 +161,8 @@ type changePasswordRequest struct {
 }
 
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	callerID, ok := r.Context().Value(mw.PlayerIDKey).(int64)
-	if !ok || callerID == 0 {
+	callerID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
 		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}

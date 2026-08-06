@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 
+	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
 type updatePlayerEventRequest struct {
-	PlayerID     int64  `json:"player_id"`
 	EventID      int64  `json:"event_id"`
 	InviteStatus string `json:"invite_status"`
 }
@@ -23,13 +23,19 @@ func mapPlayerEventToResponse(pe *entity.PlayerEvent) PlayerEventResponse {
 }
 
 func (h *Handler) UpdatePlayerEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	var req updatePlayerEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
 		return
 	}
 
-	pe, err := h.playerEvents.UpdateStatus(r.Context(), req.PlayerID, req.EventID, req.InviteStatus)
+	pe, err := h.playerEvents.UpdateStatus(r.Context(), actorID, req.EventID, req.InviteStatus)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "not_found", "Player event not found")
 		return
@@ -39,20 +45,24 @@ func (h *Handler) UpdatePlayerEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 type joinEventRequest struct {
-	PlayerID int64 `json:"player_id"`
-	EventID  int64 `json:"event_id"`
+	EventID int64 `json:"event_id"`
 }
 
 func (h *Handler) JoinEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	var req joinEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
 		return
 	}
 
-	pe, err := h.playerEvents.JoinEvent(r.Context(), req.PlayerID, req.EventID)
+	pe, err := h.playerEvents.JoinEvent(r.Context(), actorID, req.EventID)
 	if err != nil {
-		// Distinguish between conflict and other errors based on message
 		if err.Error() == "player is already part of this event" {
 			respondError(w, http.StatusConflict, "conflict", "Player is already part of this event")
 			return

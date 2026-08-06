@@ -22,11 +22,11 @@ export interface FriendshipPort {
 
 export interface NewsfeedPort {
   getPosts(limit?: number, offset?: number): Promise<Post[]>;
-  createPost(playerId: number, body: string): Promise<Post>;
-  deletePost(postId: number, playerId: number): Promise<void>;
-  toggleReaction(postId: number, playerId: number, emoji: string): Promise<Reaction[]>;
-  createReply(postId: number, playerId: number, body: string): Promise<Reply>;
-  deleteReply(postId: number, replyId: number, playerId: number): Promise<void>;
+  createPost(body: string): Promise<Post>;
+  deletePost(postId: number): Promise<void>;
+  toggleReaction(postId: number, emoji: string): Promise<Reaction[]>;
+  createReply(postId: number, body: string): Promise<Reply>;
+  deleteReply(postId: number, replyId: number): Promise<void>;
 }
 
 export function mapIncomingRequest(row: FriendshipResponse): FriendRequest {

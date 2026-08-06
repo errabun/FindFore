@@ -2,11 +2,14 @@ package httphandler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
+	"github.com/ericrabun/findfore-go/internal/application/service"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -45,16 +48,30 @@ func mapEventToResponse(e entity.EventWithDetails) EventResponse {
 	}
 }
 
-func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
-	// Check for player_id path param (nested route: /api/v1/players/:player_id/events)
-	playerIDStr := chi.URLParam(r, "player_id")
+func eventErrorStatus(err error) (int, string, string) {
+	switch {
+	case errors.Is(err, service.ErrEventNotFound):
+		return http.StatusNotFound, "not_found", "Event not found"
+	case errors.Is(err, service.ErrEventForbidden):
+		return http.StatusForbidden, "forbidden", "Not allowed to access this event"
+	default:
+		return http.StatusInternalServerError, "internal_error", "Event operation failed"
+	}
+}
 
-	// Check for query params
+func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
+	playerIDStr := chi.URLParam(r, "player_id")
 	privateParam := r.URL.Query().Get("private")
 	playerIDQuery := r.URL.Query().Get("player_id")
 
-	var playerID *int64
-	publicOnly := false
+	var forPlayerID *int64
+	publicOnly := privateParam == "false"
 
 	if playerIDStr != "" {
 		pid, err := strconv.ParseInt(playerIDStr, 10, 64)
@@ -62,21 +79,20 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "bad_request", "Invalid player_id")
 			return
 		}
-		playerID = &pid
+		forPlayerID = &pid
 	} else if playerIDQuery != "" {
 		pid, err := strconv.ParseInt(playerIDQuery, 10, 64)
 		if err != nil {
 			respondError(w, http.StatusBadRequest, "bad_request", "Invalid player_id")
 			return
 		}
-		playerID = &pid
-	} else if privateParam == "false" {
-		publicOnly = true
+		forPlayerID = &pid
 	}
 
-	events, err := h.events.List(r.Context(), playerID, publicOnly)
+	events, err := h.events.List(r.Context(), actorID, forPlayerID, publicOnly)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch events")
+		status, code, msg := eventErrorStatus(err)
+		respondError(w, status, code, msg)
 		return
 	}
 
@@ -89,6 +105,12 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -96,9 +118,10 @@ func (h *Handler) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := h.events.Get(r.Context(), id)
+	event, err := h.events.Get(r.Context(), id, actorID)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "Event not found")
+		status, code, msg := eventErrorStatus(err)
+		respondError(w, status, code, msg)
 		return
 	}
 
@@ -112,11 +135,17 @@ type createEventRequest struct {
 	OpenSpots     json.Number `json:"open_spots"`
 	NumberOfHoles string      `json:"number_of_holes"`
 	Private       bool        `json:"private"`
-	HostID        int64       `json:"host_id"`
+	HostID        int64       `json:"host_id"` // ignored; host is the authenticated player
 	Invitees      []int64     `json:"invitees"`
 }
 
 func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	var req createEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
@@ -151,10 +180,6 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "validation_error", "Number of holes can't be blank")
 		return
 	}
-	if req.HostID == 0 {
-		respondError(w, http.StatusBadRequest, "validation_error", "Host can't be blank")
-		return
-	}
 
 	e := entity.Event{
 		CourseID:      int32(courseID),
@@ -163,7 +188,7 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		OpenSpots:     int32(openSpots),
 		NumberOfHoles: req.NumberOfHoles,
 		Private:       req.Private,
-		HostID:        int32(req.HostID),
+		HostID:        int32(actorID),
 	}
 
 	event, err := h.events.Create(r.Context(), e, req.Invitees)
@@ -186,6 +211,12 @@ type updateEventRequest struct {
 }
 
 func (h *Handler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -221,9 +252,13 @@ func (h *Handler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		Private:       req.Private,
 	}
 
-	event, err := h.events.Update(r.Context(), e, req.Invitees)
+	event, err := h.events.Update(r.Context(), actorID, e, req.Invitees)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to update event")
+		status, code, msg := eventErrorStatus(err)
+		if status == http.StatusInternalServerError {
+			msg = "Failed to update event"
+		}
+		respondError(w, status, code, msg)
 		return
 	}
 
@@ -231,6 +266,12 @@ func (h *Handler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -238,8 +279,9 @@ func (h *Handler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.events.Delete(r.Context(), id); err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "Event not found")
+	if err := h.events.Delete(r.Context(), actorID, id); err != nil {
+		status, code, msg := eventErrorStatus(err)
+		respondError(w, status, code, msg)
 		return
 	}
 
@@ -247,14 +289,24 @@ func (h *Handler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListFriendsEvents(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	playerIDStr := chi.URLParam(r, "player_id")
 	pid, err := strconv.ParseInt(playerIDStr, 10, 64)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "bad_request", "Invalid player_id")
 		return
 	}
+	if pid != actorID {
+		respondError(w, http.StatusForbidden, "forbidden", "Not allowed to access another player's friends events")
+		return
+	}
 
-	events, err := h.events.ListFriendsEvents(r.Context(), pid)
+	events, err := h.events.ListFriendsEvents(r.Context(), actorID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch friends events")
 		return

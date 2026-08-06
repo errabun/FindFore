@@ -100,6 +100,13 @@ func (s *PlayerService) Create(ctx context.Context, name, phone, email, username
 		return nil, &ValidationError{Message: "Password confirmation doesn't match Password"}
 	}
 
+	if existing, err := s.players.GetByEmail(ctx, email); err == nil && existing != nil {
+		return nil, &ValidationError{Message: "Email has already been taken"}
+	}
+	if existing, err := s.players.GetByUsername(ctx, username); err == nil && existing != nil {
+		return nil, &ValidationError{Message: "Username has already been taken"}
+	}
+
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -136,6 +143,13 @@ func (s *PlayerService) Update(ctx context.Context, callerID int64, name, phone,
 	}
 	if username == "" {
 		return nil, &ValidationError{Message: "Username can't be blank"}
+	}
+
+	if existing, err := s.players.GetByEmail(ctx, email); err == nil && existing != nil && existing.ID != callerID {
+		return nil, &ValidationError{Message: "Email has already been taken"}
+	}
+	if existing, err := s.players.GetByUsername(ctx, username); err == nil && existing != nil && existing.ID != callerID {
+		return nil, &ValidationError{Message: "Username has already been taken"}
 	}
 
 	_, err := s.players.Update(ctx, entity.Player{

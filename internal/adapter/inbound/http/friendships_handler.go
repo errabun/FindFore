@@ -18,8 +18,8 @@ type createFriendshipRequest struct {
 }
 
 func actorIDFromRequest(r *http.Request) (int32, bool) {
-	authPlayerID, ok := r.Context().Value(middleware.PlayerIDKey).(int64)
-	if !ok || authPlayerID <= 0 {
+	authPlayerID, ok := middleware.PlayerIDFromContext(r.Context())
+	if !ok {
 		return 0, false
 	}
 	return int32(authPlayerID), true

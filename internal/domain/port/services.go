@@ -25,12 +25,12 @@ type CourseService interface {
 }
 
 type EventService interface {
-	List(ctx context.Context, playerID *int64, publicOnly bool) ([]entity.EventWithDetails, error)
-	Get(ctx context.Context, id int64) (*entity.EventWithDetails, error)
+	List(ctx context.Context, actorID int64, forPlayerID *int64, publicOnly bool) ([]entity.EventWithDetails, error)
+	Get(ctx context.Context, id, viewerID int64) (*entity.EventWithDetails, error)
 	Create(ctx context.Context, e entity.Event, invitees []int64) (*entity.EventWithDetails, error)
-	Update(ctx context.Context, e entity.Event, invitees []int64) (*entity.EventWithDetails, error)
-	Delete(ctx context.Context, id int64) error
-	ListFriendsEvents(ctx context.Context, playerID int64) ([]entity.EventWithDetails, error)
+	Update(ctx context.Context, actorID int64, e entity.Event, invitees []int64) (*entity.EventWithDetails, error)
+	Delete(ctx context.Context, actorID, id int64) error
+	ListFriendsEvents(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error)
 }
 
 type PlayerEventService interface {

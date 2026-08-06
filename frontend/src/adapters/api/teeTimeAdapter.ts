@@ -72,7 +72,6 @@ export const teeTimeAdapter: TeeTimePort = {
     return fetch(endpoints.playerEvent, {
       method: 'PATCH',
       body: JSON.stringify({
-        player_id: playerId,
         event_id: eventId,
         invite_status: status,
       }),
@@ -84,7 +83,6 @@ export const teeTimeAdapter: TeeTimePort = {
     return fetch(endpoints.joinEvent, {
       method: 'POST',
       body: JSON.stringify({
-        player_id: playerId,
         event_id: eventId,
       }),
       headers: authHeaders(),

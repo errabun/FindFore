@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -85,23 +86,23 @@ func (h *Handler) ListPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 type createPostRequest struct {
-	PlayerID int64  `json:"player_id"`
-	Body     string `json:"body"`
+	Body string `json:"body"`
 }
 
 func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	var req createPostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
 		return
 	}
 
-	if req.PlayerID == 0 {
-		respondError(w, http.StatusBadRequest, "validation_error", "Player ID is required")
-		return
-	}
-
-	post, err := h.posts.Create(r.Context(), req.PlayerID, req.Body)
+	post, err := h.posts.Create(r.Context(), actorID, req.Body)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create post")
 		return
@@ -110,11 +111,13 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, mapPostToResponse(*post))
 }
 
-type deletePostRequest struct {
-	PlayerID int64 `json:"player_id"`
-}
-
 func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	postIDStr := chi.URLParam(r, "post_id")
 	postID, err := strconv.ParseInt(postIDStr, 10, 64)
 	if err != nil {
@@ -122,13 +125,10 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req deletePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
-		return
-	}
+	// Body is optional for backwards compatibility; actor comes from JWT.
+	_ = json.NewDecoder(r.Body).Decode(&struct{}{})
 
-	if err := h.posts.Delete(r.Context(), postID, req.PlayerID); err != nil {
+	if err := h.posts.Delete(r.Context(), postID, actorID); err != nil {
 		respondError(w, http.StatusNotFound, "not_found", "Post not found")
 		return
 	}
@@ -137,11 +137,16 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 }
 
 type toggleReactionRequest struct {
-	PlayerID int64  `json:"player_id"`
-	Emoji    string `json:"emoji"`
+	Emoji string `json:"emoji"`
 }
 
 func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	postIDStr := chi.URLParam(r, "post_id")
 	postID, err := strconv.ParseInt(postIDStr, 10, 64)
 	if err != nil {
@@ -160,7 +165,7 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reactions, err := h.posts.ToggleReaction(r.Context(), postID, req.PlayerID, req.Emoji)
+	reactions, err := h.posts.ToggleReaction(r.Context(), postID, actorID, req.Emoji)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to toggle reaction")
 		return
@@ -175,11 +180,16 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 }
 
 type createReplyRequest struct {
-	PlayerID int64  `json:"player_id"`
-	Body     string `json:"body"`
+	Body string `json:"body"`
 }
 
 func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	postIDStr := chi.URLParam(r, "post_id")
 	postID, err := strconv.ParseInt(postIDStr, 10, 64)
 	if err != nil {
@@ -198,7 +208,7 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := h.posts.CreateReply(r.Context(), postID, req.PlayerID, req.Body)
+	reply, err := h.posts.CreateReply(r.Context(), postID, actorID, req.Body)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create reply")
 		return
@@ -208,6 +218,12 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteReply(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
 	replyIDStr := chi.URLParam(r, "reply_id")
 	replyID, err := strconv.ParseInt(replyIDStr, 10, 64)
 	if err != nil {
@@ -215,15 +231,9 @@ func (h *Handler) DeleteReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		PlayerID int64 `json:"player_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
-		return
-	}
+	_ = json.NewDecoder(r.Body).Decode(&struct{}{})
 
-	if err := h.posts.DeleteReply(r.Context(), replyID, req.PlayerID); err != nil {
+	if err := h.posts.DeleteReply(r.Context(), replyID, actorID); err != nil {
 		respondError(w, http.StatusNotFound, "not_found", "Reply not found")
 		return
 	}
