@@ -1,18 +1,22 @@
 # FindFore Development Guidelines for Claude
 
-**Last Updated:** April 04, 2026
+**Last Updated:** August 06, 2026
 **Project Name:** FindFore
 **Repository:** https://github.com/errabun/FindFore
 **Version:** 1.0
 
 ## 1. Project Overview & Vision
-- **Core Purpose:** FindFore is a mobile-first social community platform for golfers. It combines Facebook-style networking (profiles, following, feed, interactions) with seamless tee time scheduling and coordination.
-- **Key Experience:** Users create tee times (private with specific friend invites OR public where anyone can reserve open spots), message about rounds, build their golf network, discover groups, and book/play together more easily.
-- **Target Users:** Golfers of all levels who want to play more often with compatible people.
-- **Unique Value Proposition:** The social golf app that makes finding playing partners and coordinating tee times effortless and fun.
-- **Success Metrics:** Active communities, tee times created/booked, user retention, messages/invites sent, and successful group rounds.
 
-**Every feature, UI decision, and code change must support this social + tee-time coordination vision.**
+> **See [`VISION.md`](./VISION.md) for the full north star, roadmap, and strategic context.**
+
+- **One-Line Pitch:** The operating system for golfers — not a booking app. Booking is infrastructure; the product is where golfers organize their entire golf life.
+- **Core Purpose:** A mobile-first platform spanning four pillars — **Social**, **Booking**, **Playing**, and **Golf Identity** — that replaces the fragmented golf ecosystem (separate apps for handicaps, scores, GPS, booking, coordination).
+- **Killer Feature:** Group coordination — "need one more player" → post → notify → join → chat → pay → play → share scores → make friends. This solves a weekly problem every golfer has.
+- **Target Users:** Golfers of all levels who want to play more often with compatible people and keep their golf life in one place.
+- **Moat:** Network effects — golf history, social connections, and group coordination that compound over time. Booking APIs alone are not defensible.
+- **Success Metrics:** Active communities, group rounds coordinated, user retention between rounds, tee times created/booked, messages/invites sent.
+
+**Every feature, UI decision, and code change must support the four-pillar vision in `VISION.md`. When in doubt, prioritize social retention and group coordination over booking polish.**
 
 ## 2. Architecture Principles (Non-Negotiable)
 - **Hexagonal Architecture (Ports & Adapters):** Apply strictly on both backend (Go) and frontend (TypeScript/React).
@@ -48,12 +52,34 @@
 - **Golf UX Specifics:** One-tap actions for scoring/invites where possible, clear private vs public tee time flows, real-time feedback for reservations.
 
 ## 5. Core Features Scope
-- User profiles, following, community feed, interactions
-- Create tee time: private (invite specific friends) or public (open vacancies anyone can claim)
-- Invitations, RSVPs, messaging tied to tee times
-- Notifications for invites, reservations, messages
-- Course discovery/integration (using researched cost-effective data sources)
+
+Organized by the four pillars defined in `VISION.md`:
+
+**Social (retention engine)**
+- Friend list, follow golfers, golf groups, community feed, photos, achievements
+- Group coordination flow (killer feature): post → notify → join → chat → pay → play → share
+- Clubs, leagues (Phase 2+)
+
+**Booking (acquisition infrastructure)**
+- Course search and discovery (Golf Course API today; multi-provider Phase 2)
+- Tee time creation: private (invite friends) or public (open spots)
+- Invitations, RSVPs, waiting lists, cancellation alerts
+- Smart Tee Time Feed — proactive surface, not manual search (Phase 2)
+- Provider integration (Lightspeed or similar) — Phase 1 remaining work
+
+**Playing (on-course companion)**
+- GPS, digital scorecard, live leaderboard, betting formats (Phase 2)
+- Pace tracking (Phase 2+)
+
+**Golf Identity (profile layer)**
+- Rich golfer profile: handicap, rounds played, favorite course, achievements, equipment, photos
+- Basic profile editing exists today; expand toward full identity layer over time
+
+**Cross-cutting**
+- Notifications for invites, reservations, messages, coordination posts
+- Messaging / group chat tied to tee times and rounds
 - Respect privacy rules in all social/tee time flows
+- AI enhancements (recommendations, scheduling, post-round summaries) — supporting, not centerpiece
 
 ## 6. Golf Course Data
 - Claude must research and propose **cost-effective** options for course data (names, locations, pars, tees, coordinates, etc.).
@@ -73,7 +99,7 @@
 - Plan for eventual migration from Heroku to Google Cloud Run / Cloud SQL, etc., during development while keeping costs low.
 
 ## 9. Collaboration & Prompting Rules for Claude
-- **Always reference this file** at the start of sessions or major tasks.
+- **Always reference this file and `VISION.md`** at the start of sessions or major tasks.
 - When told "refer to guidelines," quote relevant sections.
 - Think step-by-step: show reasoning for hexagonal ports/adapters, DRY refactors, Mantine usage, and design proposals.
 - For design: Provide modern Mantine code examples with multiple options when choices exist.
