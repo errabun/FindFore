@@ -57,11 +57,12 @@ type PlayerEventResponse struct {
 }
 
 type FriendshipResponse struct {
-	ID         int64          `json:"id"`
-	FollowerID int32          `json:"follower_id"`
-	FolloweeID int32          `json:"followee_id"`
-	Follower   PlayerResponse `json:"follower"`
-	Followee   PlayerResponse `json:"followee"`
+	ID          int64          `json:"id"`
+	RequesterID int32          `json:"requester_id"`
+	AddresseeID int32          `json:"addressee_id"`
+	Status      string         `json:"status"`
+	Requester   PlayerResponse `json:"requester"`
+	Addressee   PlayerResponse `json:"addressee"`
 }
 
 type PostResponse struct {

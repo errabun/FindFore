@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { Tabs, SimpleGrid, Paper, Text, Title, Group, Box } from '@mantine/core';
+import { Tabs, SimpleGrid, Paper, Text, Title, Group, Box, Stack } from '@mantine/core';
 import { FiCalendar, FiMail, FiUsers } from 'react-icons/fi';
 import PlayerList from '../PlayerList/PlayerList';
 import TeeTimeContainer from '../TeeTimeContainer/TeeTimeContainer';
 import Newsfeed from '../Newsfeed/Newsfeed';
-import {
-  filterCommitted,
-  filterAvailable,
-  buildConnectedPlayerIds,
-} from '../../domain/teeTime/teeTimeService';
-import type { Event, Friend, Player, HandleFriends, HandleInviteAction } from '../../types';
+import { FriendRequestCard } from '../PlayerCard/PlayerCard';
+import { filterCommitted, filterAvailable } from '../../domain/teeTime/teeTimeService';
+import type {
+  Event,
+  Friend,
+  FriendRequest,
+  Player,
+  HandleFriends,
+  HandleInviteAction,
+} from '../../types';
 
 interface DashboardProps {
   events: Event[];
@@ -20,6 +24,8 @@ interface DashboardProps {
   handleInviteAction: HandleInviteAction;
   friends: Friend[];
   players: Player[];
+  incomingRequests: FriendRequest[];
+  outgoingPendingIds: number[];
   handleFriends: HandleFriends;
 }
 
@@ -32,17 +38,15 @@ const Dashboard = ({
   handleInviteAction,
   friends,
   players,
+  incomingRequests,
+  outgoingPendingIds,
   handleFriends,
 }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState<string | null>('committed');
 
   const committedTeeTimes = filterCommitted(events, currentUserId);
   const availableTeeTimes = filterAvailable(events, currentUserId);
-  const connectedHostIds = buildConnectedPlayerIds(
-    currentUserId,
-    friends.map((f) => f.id),
-    players,
-  );
+  const friendIds = friends.map((f) => f.id);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -61,6 +65,8 @@ const Dashboard = ({
           screenWidth={screenWidth}
           friends={friends}
           players={players}
+          incomingRequests={incomingRequests}
+          outgoingPendingIds={outgoingPendingIds}
           handleFriends={handleFriends}
         />
       )}
@@ -107,6 +113,30 @@ const Dashboard = ({
           </Paper>
         </SimpleGrid>
 
+        {incomingRequests.length > 0 && (
+          <Paper p='md' shadow='sm' mb='md' style={{ border: '1px solid var(--ff-border)' }}>
+            <Group gap='xs' mb='sm'>
+              <FiUsers style={{ color: 'var(--ff-icon-primary)' }} />
+              <Title order={5} style={{ color: 'var(--ff-heading)' }}>
+                Friend requests
+              </Title>
+              <Text size='sm' c='dimmed'>
+                ({incomingRequests.length})
+              </Text>
+            </Group>
+            <Stack gap='sm'>
+              {incomingRequests.map((request) => (
+                <FriendRequestCard
+                  key={request.id}
+                  request={request}
+                  onAccept={handleFriends.accept}
+                  onDecline={handleFriends.decline}
+                />
+              ))}
+            </Stack>
+          </Paper>
+        )}
+
         {screenWidth < 768 && (
           <Tabs value={activeTab} onChange={setActiveTab} mb='md' color='forest'>
             <Tabs.List grow>
@@ -130,7 +160,7 @@ const Dashboard = ({
                 title='Available Tee Times'
                 events={availableTeeTimes}
                 friendsEvents={friendsEvents}
-                friendIds={connectedHostIds}
+                friendIds={friendIds}
                 handleInviteAction={handleInviteAction}
               />
             </SimpleGrid>
@@ -151,7 +181,7 @@ const Dashboard = ({
             title='Available Tee Times'
             events={availableTeeTimes}
             friendsEvents={friendsEvents}
-            friendIds={connectedHostIds}
+            friendIds={friendIds}
             handleInviteAction={handleInviteAction}
           />
         )}

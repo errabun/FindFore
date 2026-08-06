@@ -39,8 +39,13 @@ type PlayerEventService interface {
 }
 
 type FriendshipService interface {
-	FindOrCreate(ctx context.Context, followerID, followeeID int32) (*entity.Friendship, *entity.PlayerWithDetails, *entity.PlayerWithDetails, error)
-	Delete(ctx context.Context, followerID, followeeID int32) error
+	Request(ctx context.Context, actorID, playerID int32) (*entity.Friendship, *entity.PlayerWithDetails, *entity.PlayerWithDetails, error)
+	Accept(ctx context.Context, actorID int32, friendshipID int64) (*entity.Friendship, *entity.PlayerWithDetails, *entity.PlayerWithDetails, error)
+	Decline(ctx context.Context, actorID int32, friendshipID int64) error
+	CancelOrUnfriend(ctx context.Context, actorID int32, friendshipID int64) error
+	ListIncomingRequests(ctx context.Context, actorID int32) ([]entity.Friendship, error)
+	ListOutgoingPendingIDs(ctx context.Context, actorID int32) ([]int64, error)
+	ListAccepted(ctx context.Context, actorID int32) ([]entity.Friendship, error)
 }
 
 type PostService interface {

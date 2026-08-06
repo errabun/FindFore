@@ -54,7 +54,7 @@ func (s *PlayerService) GetWithDetails(ctx context.Context, id int64) (*entity.P
 		return nil, fmt.Errorf("get player %d: %w", id, err)
 	}
 
-	friendIDs, err := s.friendships.ListFolloweeIDs(ctx, int32(player.ID))
+	friendIDs, err := s.friendships.ListAcceptedFriendIDs(ctx, int32(player.ID))
 	if err != nil {
 		return nil, fmt.Errorf("list friend IDs for %d: %w", id, err)
 	}

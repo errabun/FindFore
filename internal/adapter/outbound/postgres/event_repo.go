@@ -91,8 +91,8 @@ func (r *EventRepo) ListIDsByPlayerID(ctx context.Context, playerID int64) ([]in
 
 func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int32, playerID int64) ([]int64, error) {
 	return r.q.ListFriendsAvailableEventIDs(ctx, sqlcgen.ListFriendsAvailableEventIDsParams{
-		FollowerID: sql.NullInt32{Int32: followerID, Valid: true},
-		PlayerID:   sql.NullInt64{Int64: playerID, Valid: true},
+		RequesterID: sql.NullInt32{Int32: followerID, Valid: true},
+		PlayerID:    sql.NullInt64{Int64: playerID, Valid: true},
 	})
 }
 

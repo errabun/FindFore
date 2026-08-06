@@ -7,6 +7,7 @@ export const endpoints = {
   joinEvent: `${API_BASE}/api/v1/player-event/join`,
   singleEvent: `${API_BASE}/api/v1/event`,
   friendship: `${API_BASE}/api/v1/friendship`,
+  friendships: `${API_BASE}/api/v1/friendships`,
   posts: `${API_BASE}/api/v1/posts`,
   sessions: `${API_BASE}/api/v1/sessions`,
 };

@@ -52,7 +52,7 @@ func (s *SessionService) Login(ctx context.Context, login, password string) (*en
 	}
 
 	// Build player with details
-	friendIDs, err := s.friendships.ListFolloweeIDs(ctx, int32(player.ID))
+	friendIDs, err := s.friendships.ListAcceptedFriendIDs(ctx, int32(player.ID))
 	if err != nil {
 		return nil, "", fmt.Errorf("list friend IDs: %w", err)
 	}

@@ -39,8 +39,13 @@ func NewRouter(h *Handler, jwtSecret string) *chi.Mux {
 		r.Patch("/event/{id}", h.UpdateEvent)
 		r.Delete("/event/{id}", h.DeleteEvent)
 
-		r.Post("/friendship", h.CreateFriendship)
-		r.Delete("/friendship", h.DeleteFriendship)
+		r.Get("/friendships", h.ListFriendships)
+		r.Get("/friendships/requests", h.ListFriendshipRequests)
+		r.Get("/friendships/outgoing", h.ListOutgoingFriendshipRequests)
+		r.Post("/friendships", h.CreateFriendship)
+		r.Post("/friendships/{id}/accept", h.AcceptFriendship)
+		r.Post("/friendships/{id}/decline", h.DeclineFriendship)
+		r.Delete("/friendships/{id}", h.DeleteFriendship)
 
 		r.Patch("/player-event", h.UpdatePlayerEvent)
 		r.Post("/player-event/join", h.JoinEvent)

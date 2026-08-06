@@ -21,30 +21,12 @@ export function filterPublicInvites(events: Event[]): Event[] {
   return events.filter((event) => !event.private);
 }
 
-/** Invites hosted by someone in the viewer's social graph (either direction). */
+/** Invites hosted by an accepted mutual friend. */
 export function filterFriendInvites(
   events: Event[],
-  connectedHostIds: number[],
+  friendIds: number[],
 ): Event[] {
-  return events.filter((event) => connectedHostIds.includes(event.host_id));
-}
-
-/**
- * Friendships are stored one-way (follower → followee). For dashboard filtering,
- * treat either direction as a connection so "Eric added Ashley" still surfaces
- * Eric's tee times on Ashley's Friends segment.
- */
-export function buildConnectedPlayerIds(
-  currentUserId: number,
-  followingIds: number[],
-  allPlayers: { id: number; friends: number[] }[],
-): number[] {
-  const followers = allPlayers
-    .filter(
-      (p) => p.id !== currentUserId && p.friends.includes(currentUserId),
-    )
-    .map((p) => p.id);
-  return [...new Set([...followingIds, ...followers])];
+  return events.filter((event) => friendIds.includes(event.host_id));
 }
 
 export function isHost(event: Event, playerId: number): boolean {

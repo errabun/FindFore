@@ -1,25 +1,42 @@
 import type { Post, Reaction, Reply } from '../../domain/social/types';
 import type { FriendshipPort, FriendshipResponse, NewsfeedPort } from '../../ports/socialPort';
-import { endpoints, request, requestVoid, requestRaw } from './httpClient';
+import { endpoints, request, requestVoid } from './httpClient';
 
 export const friendshipAdapter: FriendshipPort = {
-  follow(followerId: number, followeeId: number): Promise<FriendshipResponse> {
-    return request<FriendshipResponse>(endpoints.friendship, {
+  listAccepted(): Promise<FriendshipResponse[]> {
+    return request<FriendshipResponse[]>(endpoints.friendships);
+  },
+
+  listIncomingRequests(): Promise<FriendshipResponse[]> {
+    return request<FriendshipResponse[]>(`${endpoints.friendships}/requests`);
+  },
+
+  listOutgoingPendingIds(): Promise<number[]> {
+    return request<number[]>(`${endpoints.friendships}/outgoing`);
+  },
+
+  request(playerId: number): Promise<FriendshipResponse> {
+    return request<FriendshipResponse>(endpoints.friendships, {
       method: 'POST',
-      body: JSON.stringify({
-        follower_id: followerId,
-        followee_id: followeeId,
-      }),
+      body: JSON.stringify({ player_id: playerId }),
     });
   },
 
-  unfollow(followerId: number, followeeId: number): Promise<Response> {
-    return requestRaw(endpoints.friendship, {
+  accept(friendshipId: number): Promise<FriendshipResponse> {
+    return request<FriendshipResponse>(`${endpoints.friendships}/${friendshipId}/accept`, {
+      method: 'POST',
+    });
+  },
+
+  decline(friendshipId: number): Promise<void> {
+    return requestVoid(`${endpoints.friendships}/${friendshipId}/decline`, {
+      method: 'POST',
+    });
+  },
+
+  remove(friendshipId: number): Promise<void> {
+    return requestVoid(`${endpoints.friendships}/${friendshipId}`, {
       method: 'DELETE',
-      body: JSON.stringify({
-        follower_id: followerId,
-        followee_id: followeeId,
-      }),
     });
   },
 };

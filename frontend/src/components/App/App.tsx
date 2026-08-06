@@ -22,10 +22,24 @@ import type { Event, Friend } from '../../types';
 function App() {
   const { hostPlayer, loginError, allPlayers, validateLogin, logout, clearLoginError, updateProfile, changePassword } = useAuth();
   const { events, friendsEvents, updateInvite, cancelCommitment, joinTeeTime, refreshEvents } = useTeeTimes(hostPlayer);
-  const { friends, addFriend, removeFriend } = useFriends(hostPlayer, allPlayers);
+  const {
+    friends,
+    incomingRequests,
+    outgoingPendingIds,
+    requestFriend,
+    acceptRequest,
+    declineRequest,
+    removeFriend,
+  } = useFriends(hostPlayer, allPlayers);
   const screenWidth = useScreenWidth();
 
   const currentUserName = allPlayers.find((p) => p.id === hostPlayer)?.name || '';
+  const handleFriends = {
+    request: requestFriend,
+    remove: removeFriend,
+    accept: acceptRequest,
+    decline: declineRequest,
+  };
 
   return (
     <Router>
@@ -69,7 +83,9 @@ function App() {
                 }}
                 players={allPlayers}
                 friends={friends}
-                handleFriends={{ add: addFriend, remove: removeFriend }}
+                incomingRequests={incomingRequests}
+                outgoingPendingIds={outgoingPendingIds}
+                handleFriends={handleFriends}
               />
             )
           }
@@ -87,7 +103,9 @@ function App() {
                 userId={hostPlayer}
                 players={allPlayers}
                 friends={friends}
-                handleFriends={{ add: addFriend, remove: removeFriend }}
+                incomingRequests={incomingRequests}
+                outgoingPendingIds={outgoingPendingIds}
+                handleFriends={handleFriends}
               />
             )
           }

@@ -2,12 +2,14 @@
 export type { Player, LoginResponse, UpdateProfileRequest, ChangePasswordRequest } from './domain/auth/types';
 export type { Event } from './domain/teeTime/types';
 export type { Course } from './domain/course/types';
-export type { Friend, Post, Reaction, Reply } from './domain/social/types';
+export type { Friend, FriendRequest, Post, Reaction, Reply } from './domain/social/types';
 
 // UI-specific handler interfaces (component prop contracts, not domain)
 export interface HandleFriends {
-  add: (friend: import('./domain/social/types').Friend) => void;
+  request: (player: import('./domain/social/types').Friend | import('./domain/auth/types').Player) => void;
   remove: (friend: import('./domain/social/types').Friend) => void;
+  accept: (requestId: number) => void;
+  decline: (requestId: number) => void;
 }
 
 export interface HandleInviteAction {

@@ -1,18 +1,28 @@
 import { useState } from 'react';
 import { SegmentedControl, Text, Stack, Button, ThemeIcon } from '@mantine/core';
-import { FiUsers } from 'react-icons/fi';
-import PlayerCard from '../PlayerCard/PlayerCard';
-import type { Friend, Player, HandleFriends } from '../../types';
+import { FiUsers, FiMail } from 'react-icons/fi';
+import PlayerCard, { FriendRequestCard } from '../PlayerCard/PlayerCard';
+import type { Friend, FriendRequest, Player, HandleFriends } from '../../types';
 
 interface PlayerListProps {
   screenWidth: number;
   players: Player[];
   friends: Friend[];
+  incomingRequests: FriendRequest[];
+  outgoingPendingIds: number[];
   handleFriends: HandleFriends;
   userId: number;
 }
 
-const PlayerList = ({ screenWidth, players, friends, handleFriends, userId }: PlayerListProps) => {
+const PlayerList = ({
+  screenWidth,
+  players,
+  friends,
+  incomingRequests,
+  outgoingPendingIds,
+  handleFriends,
+  userId,
+}: PlayerListProps) => {
   const [playerType, setPlayerType] = useState('friends');
 
   const mapPlayers = (type: (Friend | Player)[]) => {
@@ -23,6 +33,8 @@ const PlayerList = ({ screenWidth, players, friends, handleFriends, userId }: Pl
           key={p.id}
           playerInfo={p}
           friends={friends}
+          incomingRequests={incomingRequests}
+          outgoingPendingIds={outgoingPendingIds}
           handleFriends={handleFriends}
         />
       ));
@@ -52,12 +64,18 @@ const PlayerList = ({ screenWidth, players, friends, handleFriends, userId }: Pl
         fullWidth
         data={[
           { label: 'Friends', value: 'friends' },
+          {
+            label: incomingRequests.length
+              ? `Requests (${incomingRequests.length})`
+              : 'Requests',
+            value: 'requests',
+          },
           { label: 'Community', value: 'community' },
         ]}
         data-cy='player-type'
       />
       <Stack gap='xs'>
-        {!friends.length && playerType === 'friends' && (
+        {playerType === 'friends' && !friends.length && (
           <Stack align='center' gap='md' py='xl'>
             <ThemeIcon size='xl' radius='xl' variant='light' color='forest'>
               <FiUsers size={20} />
@@ -77,7 +95,32 @@ const PlayerList = ({ screenWidth, players, friends, handleFriends, userId }: Pl
             </Button>
           </Stack>
         )}
-        {playerType === 'friends' ? mapPlayers(friends) : mapPlayers(players)}
+
+        {playerType === 'friends' && mapPlayers(friends)}
+
+        {playerType === 'requests' && !incomingRequests.length && (
+          <Stack align='center' gap='md' py='xl'>
+            <ThemeIcon size='xl' radius='xl' variant='light' color='forest'>
+              <FiMail size={20} />
+            </ThemeIcon>
+            <Text ta='center' c='dimmed' size='sm'>
+              No pending friend requests.
+            </Text>
+          </Stack>
+        )}
+
+        {playerType === 'requests' &&
+          incomingRequests.map((request) => (
+            <FriendRequestCard
+              key={request.id}
+              request={request}
+              onAccept={handleFriends.accept}
+              onDecline={handleFriends.decline}
+              compact
+            />
+          ))}
+
+        {playerType === 'community' && mapPlayers(players)}
       </Stack>
     </aside>
   );

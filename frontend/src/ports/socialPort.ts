@@ -1,17 +1,23 @@
 import type { Player } from '../domain/auth/types';
-import type { Post, Reaction, Reply } from '../domain/social/types';
+import type { FriendRequest, Post, Reaction, Reply } from '../domain/social/types';
 
 export interface FriendshipResponse {
   id: number;
-  follower_id: number;
-  followee_id: number;
-  follower: Player;
-  followee: Player;
+  requester_id: number;
+  addressee_id: number;
+  status: string;
+  requester: Player;
+  addressee: Player;
 }
 
 export interface FriendshipPort {
-  follow(followerId: number, followeeId: number): Promise<FriendshipResponse>;
-  unfollow(followerId: number, followeeId: number): Promise<Response>;
+  listAccepted(): Promise<FriendshipResponse[]>;
+  listIncomingRequests(): Promise<FriendshipResponse[]>;
+  listOutgoingPendingIds(): Promise<number[]>;
+  request(playerId: number): Promise<FriendshipResponse>;
+  accept(friendshipId: number): Promise<FriendshipResponse>;
+  decline(friendshipId: number): Promise<void>;
+  remove(friendshipId: number): Promise<void>;
 }
 
 export interface NewsfeedPort {
@@ -21,4 +27,15 @@ export interface NewsfeedPort {
   toggleReaction(postId: number, playerId: number, emoji: string): Promise<Reaction[]>;
   createReply(postId: number, playerId: number, body: string): Promise<Reply>;
   deleteReply(postId: number, replyId: number, playerId: number): Promise<void>;
+}
+
+export function mapIncomingRequest(row: FriendshipResponse): FriendRequest {
+  return {
+    id: row.id,
+    requesterId: row.requester_id,
+    addresseeId: row.addressee_id,
+    status: row.status,
+    requesterName: row.requester.name,
+    addresseeName: row.addressee.name,
+  };
 }

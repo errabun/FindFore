@@ -1,6 +1,17 @@
 export interface Friend {
   id: number;
   name: string;
+  /** Row id in friendships table — required to unfriend/cancel via API. */
+  friendshipId?: number;
+}
+
+export interface FriendRequest {
+  id: number;
+  requesterId: number;
+  addresseeId: number;
+  status: string;
+  requesterName: string;
+  addresseeName: string;
 }
 
 export interface Reaction {

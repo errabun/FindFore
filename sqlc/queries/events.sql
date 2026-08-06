@@ -55,7 +55,13 @@ SELECT DISTINCT e.id
 FROM events e
 JOIN player_events pe ON pe.event_id = e.id AND pe.invite_status = 1
 WHERE pe.player_id IN (
-  SELECT followee_id FROM friendships WHERE follower_id = $1
+  SELECT CASE
+    WHEN requester_id = $1 THEN addressee_id
+    ELSE requester_id
+  END
+  FROM friendships
+  WHERE status = 1
+    AND (requester_id = $1 OR addressee_id = $1)
 )
 AND NOT EXISTS (
   SELECT 1 FROM player_events pe2

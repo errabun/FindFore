@@ -49,10 +49,15 @@ type PlayerEventRepository interface {
 }
 
 type FriendshipRepository interface {
-	Find(ctx context.Context, followerID, followeeID int32) (*entity.Friendship, error)
-	Create(ctx context.Context, followerID, followeeID int32) (*entity.Friendship, error)
-	Delete(ctx context.Context, followerID, followeeID int32) error
-	ListFolloweeIDs(ctx context.Context, followerID int32) ([]int64, error)
+	GetByID(ctx context.Context, id int64) (*entity.Friendship, error)
+	Find(ctx context.Context, requesterID, addresseeID int32) (*entity.Friendship, error)
+	FindBetween(ctx context.Context, playerA, playerB int32) (*entity.Friendship, error)
+	Create(ctx context.Context, requesterID, addresseeID int32, status entity.FriendshipStatus) (*entity.Friendship, error)
+	UpdateStatus(ctx context.Context, id int64, status entity.FriendshipStatus) (*entity.Friendship, error)
+	DeleteByID(ctx context.Context, id int64) error
+	ListAcceptedFriendIDs(ctx context.Context, playerID int32) ([]int64, error)
+	ListIncomingPending(ctx context.Context, addresseeID int32) ([]entity.Friendship, error)
+	ListOutgoingPending(ctx context.Context, requesterID int32) ([]entity.Friendship, error)
 	ListAcceptedEventIDs(ctx context.Context, playerID int64) ([]int64, error)
 }
 
