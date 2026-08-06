@@ -5,6 +5,10 @@ import { FiCalendar, FiMail, FiUsers } from 'react-icons/fi';
 import TeeTime from '../TeeTime/TeeTime';
 import EmptyState from '../EmptyState/EmptyState';
 import InviteTypeSelect from './InviteTypeSelect/InviteTypeSelect';
+import {
+  filterFriendInvites,
+  filterPublicInvites,
+} from '../../domain/teeTime/teeTimeService';
 import type { Event, HandleInviteAction } from '../../types';
 
 interface TeeTimeContainerProps {
@@ -25,10 +29,12 @@ const TeeTimeContainer = ({
   currentUserId,
 }: TeeTimeContainerProps) => {
   const [publicInvites, setPublicInvites] = useState<Event[]>([]);
-  const [privateInvites, setPrivateInvites] = useState<Event[]>([]);
+  const [friendInvites, setFriendInvites] = useState<Event[]>([]);
   const [committedTeeTimes, setCommittedTeeTimes] = useState<Event[]>([]);
+  // Default Available to All so public community invites are visible immediately
+  // (Friends is one-way follow-based and often empty for the invitee).
   const [invitesToDisplay, setInvitesToDisplay] = useState(
-    title === 'Committed Tee Times' ? '' : 'private'
+    title === 'Committed Tee Times' ? '' : 'all'
   );
   const getEventType = useRef<() => string | undefined>(() => undefined);
 
@@ -42,7 +48,13 @@ const TeeTimeContainer = ({
 
   const isAvailable = title === 'Available Tee Times';
   const displayCount = isAvailable
-    ? (invitesToDisplay === 'private' ? privateInvites.length : invitesToDisplay === 'public' ? publicInvites.length : friendsEvents.length)
+    ? (invitesToDisplay === 'all'
+        ? events.length
+        : invitesToDisplay === 'friends'
+          ? friendInvites.length
+          : invitesToDisplay === 'public'
+            ? publicInvites.length
+            : friendsEvents.length)
     : committedTeeTimes.length;
 
   const getTeeTimes = (eventsType: Event[]) => {
@@ -61,8 +73,8 @@ const TeeTimeContainer = ({
 
   useEffect(() => {
     if (getEventType.current() === 'available') {
-      setPublicInvites(events.filter((event) => !event.private));
-      setPrivateInvites(events.filter((event) => friendIds.includes(event.host_id)));
+      setPublicInvites(filterPublicInvites(events));
+      setFriendInvites(filterFriendInvites(events, friendIds));
     } else {
       setCommittedTeeTimes(events);
     }
@@ -106,7 +118,8 @@ const TeeTimeContainer = ({
 
       <Stack gap='xs' p='md' style={{ overflowY: 'auto', flex: 1 }}>
         {title === 'Committed Tee Times' && getTeeTimes(committedTeeTimes)}
-        {invitesToDisplay === 'private' && getTeeTimes(privateInvites)}
+        {invitesToDisplay === 'all' && getTeeTimes(events)}
+        {invitesToDisplay === 'friends' && getTeeTimes(friendInvites)}
         {invitesToDisplay === 'public' && getTeeTimes(publicInvites)}
         {invitesToDisplay === 'join' && friendsEvents.map((event) => (
           <TeeTime
@@ -123,7 +136,15 @@ const TeeTimeContainer = ({
             description='Accept an invite to join a round.'
           />
         )}
-        {invitesToDisplay === 'private' && !privateInvites.length && (
+        {invitesToDisplay === 'all' && !events.length && (
+          <EmptyState
+            icon={<FiMail size={20} />}
+            title='No available tee times'
+            description='No invitations or open community rounds right now.'
+            actionLabel='Create One'
+          />
+        )}
+        {invitesToDisplay === 'friends' && !friendInvites.length && (
           <EmptyState
             icon={<FiMail size={20} />}
             title='No friend invitations'

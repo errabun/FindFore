@@ -6,7 +6,7 @@ interface TypeSelectorProps {
 }
 
 const TypeSelector = ({ handleClick }: TypeSelectorProps) => {
-  const [value, setValue] = useState('private');
+  const [value, setValue] = useState('all');
 
   return (
     <SegmentedControl
@@ -19,7 +19,8 @@ const TypeSelector = ({ handleClick }: TypeSelectorProps) => {
       color='forest'
       radius='xl'
       data={[
-        { label: 'Friends', value: 'private' },
+        { label: 'All', value: 'all' },
+        { label: 'Friends', value: 'friends' },
         { label: 'Public', value: 'public' },
         { label: 'Open', value: 'join' },
       ]}

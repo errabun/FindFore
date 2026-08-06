@@ -21,7 +21,7 @@ export function useAuth() {
     setLoginError('');
     authAdapter
       .login(email, password)
-      .then((data) => {
+      .then(async (data) => {
         if (!data) {
           setLoginError('Invalid email or password. Please try again.');
           return;
@@ -31,6 +31,14 @@ export function useAuth() {
           setToken(data.token);
         }
         touchActivity();
+        // Refresh player graph so friend lists reflect follows made this session
+        // before a full page reload (needed for Available → Friends filtering).
+        try {
+          const players = await authAdapter.getAllPlayers();
+          setAllPlayers(players);
+        } catch {
+          // Keep stale list; dashboard still works with prior snapshot
+        }
       })
       .catch(() => {
         setLoginError('Unable to sign in right now. Please try again.');

@@ -4,7 +4,11 @@ import { FiCalendar, FiMail, FiUsers } from 'react-icons/fi';
 import PlayerList from '../PlayerList/PlayerList';
 import TeeTimeContainer from '../TeeTimeContainer/TeeTimeContainer';
 import Newsfeed from '../Newsfeed/Newsfeed';
-import { filterCommitted, filterAvailable } from '../../domain/teeTime/teeTimeService';
+import {
+  filterCommitted,
+  filterAvailable,
+  buildConnectedPlayerIds,
+} from '../../domain/teeTime/teeTimeService';
 import type { Event, Friend, Player, HandleFriends, HandleInviteAction } from '../../types';
 
 interface DashboardProps {
@@ -34,6 +38,11 @@ const Dashboard = ({
 
   const committedTeeTimes = filterCommitted(events, currentUserId);
   const availableTeeTimes = filterAvailable(events, currentUserId);
+  const connectedHostIds = buildConnectedPlayerIds(
+    currentUserId,
+    friends.map((f) => f.id),
+    players,
+  );
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -121,7 +130,7 @@ const Dashboard = ({
                 title='Available Tee Times'
                 events={availableTeeTimes}
                 friendsEvents={friendsEvents}
-                friendIds={friends.map((f) => f.id)}
+                friendIds={connectedHostIds}
                 handleInviteAction={handleInviteAction}
               />
             </SimpleGrid>
@@ -142,7 +151,7 @@ const Dashboard = ({
             title='Available Tee Times'
             events={availableTeeTimes}
             friendsEvents={friendsEvents}
-            friendIds={friends.map((f) => f.id)}
+            friendIds={connectedHostIds}
             handleInviteAction={handleInviteAction}
           />
         )}
