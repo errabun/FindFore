@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
+
+const maxLoggedBodyBytes = 512
 
 type golfCourseAPIResponse struct {
 	Courses []golfCourseResult `json:"courses"`
@@ -38,8 +41,10 @@ type Client struct {
 }
 
 // NewClient returns a Client configured with the given API key.
+// Trims surrounding whitespace so a stray newline in an env var or Secret Manager
+// version can't break the Authorization header.
 func NewClient(apiKey string) *Client {
-	return &Client{apiKey: apiKey}
+	return &Client{apiKey: strings.TrimSpace(apiKey)}
 }
 
 // Search queries the Golf Course API and returns matching courses.
@@ -52,6 +57,10 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 
 	apiURL := fmt.Sprintf("https://api.golfcourseapi.com/v1/search?search_query=%s&limit=10",
 		url.QueryEscape(query))
+
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("golfcourseapi: API key is empty")
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -70,8 +79,16 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 		return nil, fmt.Errorf("golfcourseapi: read response: %w", err)
 	}
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("golfcourseapi: non-2xx status=%d url=%s body=%s",
+			resp.StatusCode, apiURL, truncate(body, maxLoggedBodyBytes))
+		return nil, fmt.Errorf("golfcourseapi: unexpected status %d", resp.StatusCode)
+	}
+
 	var apiResp golfCourseAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
+		log.Printf("golfcourseapi: parse failed url=%s body=%s",
+			apiURL, truncate(body, maxLoggedBodyBytes))
 		return nil, fmt.Errorf("golfcourseapi: parse response: %w", err)
 	}
 
@@ -96,4 +113,11 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 	}
 
 	return results, nil
+}
+
+func truncate(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[:n]) + "...(truncated)"
 }

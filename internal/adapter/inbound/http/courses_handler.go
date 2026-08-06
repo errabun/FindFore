@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -45,6 +46,7 @@ func (h *Handler) SearchCourses(w http.ResponseWriter, r *http.Request) {
 
 	courses, err := h.courses.Search(r.Context(), query)
 	if err != nil {
+		log.Printf("SearchCourses q=%q: %v", query, err)
 		respondError(w, http.StatusBadGateway, "upstream_error", "Failed to search courses")
 		return
 	}
