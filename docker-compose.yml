@@ -1,0 +1,25 @@
+# Local development database.
+# Data persists in a named volume; delete with `docker compose down -v` to reset.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: findfore-db
+    environment:
+      POSTGRES_DB: findfore
+      POSTGRES_USER: findfore
+      POSTGRES_PASSWORD: findfore
+    ports:
+      # Host 5433 to avoid conflicting with other local Postgres instances.
+      # Inside the container Postgres is still on 5432.
+      - "5433:5432"
+    volumes:
+      - findfore-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U findfore -d findfore"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  findfore-pg-data:
