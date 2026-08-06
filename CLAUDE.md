@@ -24,13 +24,13 @@
   - Ports define interfaces for external concerns.
   - Adapters implement ports (PostgreSQL via sqlc, Google services, Mantine UI, Redux, etc.).
 - **DRY Principle:** Aggressively eliminate duplication across layers. Extract reusable domain services, utilities, ports, and UI components.
-- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `seed/`, etc.). Evolve it toward full hexagonal without unnecessary disruption.
+- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `cmd/`, etc.). Evolve it toward full hexagonal without unnecessary disruption.
 - **Clean Separation:** Business logic must stay in domain; never leak into UI, DB, or infrastructure.
 
 ## 3. Tech Stack (Locked In)
 - **Frontend:** React + TypeScript, mobile-first (PWA-capable, responsive design). Use **Mantine** as the sole component library — always reference the latest Mantine v7+ documentation for components, themes, hooks, and patterns.
 - **State Management:** Redux (with Redux Toolkit preferred for modern patterns).
-- **Backend:** Go (latest stable) with PostgreSQL. Leverage existing sqlc for type-safe queries, migrations, and seed scripts.
+- **Backend:** Go (latest stable) with PostgreSQL. Leverage existing sqlc for type-safe queries and migrations.
 - **Styling:** Mantine theme customization for golf-inspired branding.
 - **Authentication:** Prioritize Google Identity / Google Authenticator.
 - **Maps:** Integrate Google Maps where relevant (course locations, tee time meetups).

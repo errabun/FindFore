@@ -11,5 +11,4 @@ frontend/dist
 .cursor
 *.md
 !migrations/**
-seed/
 frontend/cypress
