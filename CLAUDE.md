@@ -34,7 +34,7 @@
 - **Styling:** Mantine theme customization for golf-inspired branding.
 - **Authentication:** Prioritize Google Identity / Google Authenticator.
 - **Maps:** Integrate Google Maps where relevant (course locations, tee time meetups).
-- **Hosting:** Currently Heroku (Procfile present). Actively propose and assist migration to cheaper Google Cloud alternatives (Cloud Run, etc.) suitable for low-traffic development phase.
+- **Hosting:** Google Cloud Run (containerized Go server + static frontend). PostgreSQL on Cloud SQL. CI/CD via Cloud Build (`cloudbuild.yaml`). Artifact Registry for images. Secret Manager for runtime secrets.
 - **Google Cloud:** Use services where beneficial (Auth, Maps, Cloud SQL for PostgreSQL, Storage, Pub/Sub for notifications, etc.). Developer account: errabun@gmail.com.
 - **Other:** Offline/responsive considerations for mobile golf use (poor signal on courses).
 
@@ -95,8 +95,12 @@ Organized by the four pillars defined in `VISION.md`:
   - Any business logic that affects user trust or data integrity
 
 ## 8. Google Cloud & Infrastructure
+- **Runtime:** Cloud Run service built from repo `Dockerfile` (multi-stage: frontend build → Go binary → distroless).
+- **Database:** Cloud SQL PostgreSQL via Unix socket (`INSTANCE_CONNECTION_NAME`, `DB_USER`, `DB_PASS`, `DB_NAME`) or `DATABASE_URL` for local dev.
+- **Deploy:** `cloudbuild.yaml` builds image, pushes to Artifact Registry, deploys to Cloud Run. Connect repo in Cloud Console or use `gcloud builds submit`.
+- **Secrets:** JWT, DB password, API keys in Secret Manager — never in the image or repo.
+- **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
 - Leverage Google services (Auth, Maps, etc.) where they provide good integration or cost benefits.
-- Plan for eventual migration from Heroku to Google Cloud Run / Cloud SQL, etc., during development while keeping costs low.
 
 ## 9. Collaboration & Prompting Rules for Claude
 - **Always reference this file and `VISION.md`** at the start of sessions or major tasks.

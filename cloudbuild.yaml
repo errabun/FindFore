@@ -1,0 +1,47 @@
+# Cloud Build → Artifact Registry → Cloud Run
+# Connect this repo in Cloud Run (Connect repo) or create a trigger on push to main.
+#
+# Required setup (one-time):
+# - Artifact Registry repo: findfore (Docker, same region as Cloud Run)
+# - Cloud Run service: findfore
+# - Secret Manager secrets mounted as env vars on the service
+# - Cloud SQL instance linked via --add-cloudsql-instances on deploy
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: findfore
+  _REPOSITORY: findfore
+  _IMAGE: app
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

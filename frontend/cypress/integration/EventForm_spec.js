@@ -1,11 +1,11 @@
-const prodEnv = 'https://fore-finder-be.herokuapp.com'
+const apiBase = Cypress.config('baseUrl') || 'http://localhost:3000';
 
 describe('EventForm', () => {
 
   beforeEach(() => {
 
-    cy.visit('http://localhost:3000/event-form')
-      .intercept(`${prodEnv}/api/v1/courses`, {
+    cy.visit('/event-form')
+      .intercept(`${apiBase}/api/v1/courses`, {
         data: [
           {
             id: '1', 
@@ -22,7 +22,7 @@ describe('EventForm', () => {
           }
         ]
       })
-      .intercept(`${prodEnv}/api/v1/players`, {
+      .intercept(`${apiBase}/api/v1/players`, {
         data: [
     {
       "id": "1",
@@ -125,8 +125,8 @@ describe('Sad Path Tests', () => {
 
   beforeEach(() => {
 
-    cy.visit('http://localhost:3000/event-form')
-      .intercept(`${prodEnv}/api/v1/courses`, {
+    cy.visit('/event-form')
+      .intercept(`${apiBase}/api/v1/courses`, {
         data: [
           {
             id: '1', 
@@ -143,7 +143,7 @@ describe('Sad Path Tests', () => {
           }
         ]
       })
-      .intercept(`${prodEnv}/api/v1/players`, {
+      .intercept(`${apiBase}/api/v1/players`, {
         data: [
           {
             id: '1', 

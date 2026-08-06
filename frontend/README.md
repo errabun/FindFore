@@ -1,27 +1,29 @@
-[![CircleCI](https://circleci.com/gh/foreFinder/fore-finder-fe/tree/main.svg?style=shield)](https://circleci.com/gh/foreFinder/fore-finder-fe/tree/main)
+# ForeFinder (FindFore frontend)
 
-# ForeFinder
+Legacy Turing capstone README. The monorepo now deploys via **Google Cloud Run** — see repo root `Dockerfile`, `cloudbuild.yaml`, and `CLAUDE.md`.
 
+## Local development
+
+1. `cd frontend`
+2. `npm install`
+3. `npm run dev` — Vite dev server at http://localhost:3000
+
+Run the Go API separately from the repo root (`go run .`) with `DATABASE_URL` and `JWT_SECRET` set (see `.env.example`).
 
 ## Table of Contents
 
 * [Overview](#overview)
 * [Installation](#installation)
 * [Walkthrough](#walkthrough)
-* [New Learning](#newlearning)
-* [Author](#author)
-* [Technologies](#technologies)
-
-Check out our ✨[Heroku Deployment](https://forefinder.herokuapp.com/dashboard)✨
-
 
 ## Overview
+
 ForeFinder is a mobile-focused web application that makes linking up with others for a round of golf easier. Coordination can sometimes be a difficult task when filling spots for a tee time, but ForeFinder provides the tools to make that task a hole in one. Add friends to your ForeFinder network to create a private tee time invitation, or send out an invite to the entire ForeFinder community to get your slots filled ASAP! With future iterations this app will also help courses in securing lost revenue from last minute cancellations by parties, which is a large loss for most courses currently. 
 
- - Developed in tandem with a team from the back-end program at [Turing School of Software & Design](https://turing.edu/) (view their repo [here](https://forefinder.herokuapp.com/dashboard))
+ - Developed in tandem with a team from the back-end program at [Turing School of Software & Design](https://turing.edu/)
  - Built using [React](https://reactjs.org/) + [React Router](reactrouter.com)
  - End-to-end tested with [Cypress](cypress.io)
- - CI/CD with [CircleCI](circleci.com) + [Heroku](heroku.com)
+ - Deployed via Google Cloud Run + Cloud Build (see repo root `cloudbuild.yaml`)
  - Responsive design for mobile, tablet or desktop
  - [PWA](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps) optimization for mobile installation + caching
 
@@ -35,7 +37,7 @@ ForeFinder is a mobile-focused web application that makes linking up with others
 4. Run `npm start` to begin the development server & open the app in a separate window
 
 ### Pleasure:
-1. Visit the [deployed app](https://forefinder.herokuapp.com/dashboard) in a Chrome browser
+1. Run the app locally (see Local development above) or deploy to your Cloud Run URL
 2. Open the Chrome controls (three dots in the top right) and select "Add to Homepage" (mobile) or "Install ForeFinder" (desktop)
 3. The ForeFinder app should now be accessible as an app on your phone's home screen or in your computer's "Chrome Apps" folder
 4. You do not need to create a login at this stage of development.  The app and almost all the features are accessible and operational while still in development! 
@@ -77,7 +79,7 @@ Lighthouse Report
 ## Learning Goals
 - Communicating as a full-stack team to ensure data flowed efficently and effectively from front to back
 - Learning, developing, and practicing a Git Rebase workflow
-- Configuring and utilizing CircleCI to ensure early and consistent deployment to production
+- Configuring continuous deployment (originally CircleCI; now Google Cloud Build → Cloud Run)
 - Interfacing with PWA technologies to allow mobile installation and caching
 
 

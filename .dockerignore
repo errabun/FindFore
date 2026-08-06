@@ -13,4 +13,3 @@ frontend/dist
 !migrations/**
 seed/
 frontend/cypress
-frontend/.circleci
