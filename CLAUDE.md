@@ -100,6 +100,7 @@ Organized by the four pillars defined in `VISION.md`:
 - **Deploy:** `cloudbuild.yaml` builds image, pushes to Artifact Registry, deploys to Cloud Run. Connect repo in Cloud Console or use `gcloud builds submit`.
 - **Secrets:** JWT, DB password, API keys in Secret Manager — never in the image or repo.
 - **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
+- **Domain:** `findfore.com` (registered via GoDaddy). Map to Cloud Run once the app is live (Cloud Run → Manage custom domains, then update GoDaddy DNS). Use `findfore.com` (or `www.findfore.com`) in CORS `ALLOWED_ORIGINS`, PWA manifest `start_url`, and share links once mapped.
 - Leverage Google services (Auth, Maps, etc.) where they provide good integration or cost benefits.
 
 ## 9. Collaboration & Prompting Rules for Claude

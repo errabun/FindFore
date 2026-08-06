@@ -1,47 +1,70 @@
 # Cloud Build → Artifact Registry → Cloud Run
-# Connect this repo in Cloud Run (Connect repo) or create a trigger on push to main.
 #
-# Required setup (one-time):
-# - Artifact Registry repo: findfore (Docker, same region as Cloud Run)
-# - Cloud Run service: findfore
-# - Secret Manager secrets mounted as env vars on the service
-# - Cloud SQL instance linked via --add-cloudsql-instances on deploy
+# Usage:
+#   gcloud builds submit --config=cloudbuild.yaml
+#
+# Or connect this repo in Cloud Run → Continuous deployment to auto-run on push.
+#
+# All values default to the Phase C setup (project findfore, us-central1).
+# $PROJECT_ID is provided by Cloud Build automatically from the active project.
+# Override at submit time with --substitutions=_REGION=us-east1,etc.
 
 substitutions:
   _REGION: us-central1
   _SERVICE: findfore
   _REPOSITORY: findfore
   _IMAGE: app
+  _SQL_INSTANCE: findfore-db
+  _RUN_SA: findfore-run
+  _DB_NAME: findfore
+  _DB_USER: findfore
 
 steps:
+  # 1. Build the multi-stage container.
+  # $BUILD_ID is always set (both manual `gcloud builds submit` and trigger runs).
+  # $COMMIT_SHA is only populated by triggers, so avoid it for portability.
   - name: gcr.io/cloud-builders/docker
+    id: build
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$BUILD_ID
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
       - .
 
+  # 2. Push both tags to Artifact Registry
   - name: gcr.io/cloud-builders/docker
+    id: push
     args:
       - push
       - --all-tags
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}
 
+  # 3. Deploy to Cloud Run with Cloud SQL + Secret Manager wiring
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
     entrypoint: gcloud
     args:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$BUILD_ID
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
+      - --service-account=${_RUN_SA}@$PROJECT_ID.iam.gserviceaccount.com
+      - --add-cloudsql-instances=$PROJECT_ID:${_REGION}:${_SQL_INSTANCE}
+      - --set-env-vars=INSTANCE_CONNECTION_NAME=$PROJECT_ID:${_REGION}:${_SQL_INSTANCE},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER}
+      - --set-secrets=DB_PASS=findfore-db-password:latest,JWT_SECRET=findfore-jwt-secret:latest,GOLF_COURSE_API_KEY=findfore-golf-course-api-key:latest
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=3
+      - --concurrency=80
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$BUILD_ID
 
 options:
   logging: CLOUD_LOGGING_ONLY
