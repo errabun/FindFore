@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
@@ -17,8 +16,9 @@ import (
 func NewRouter(h *Handler, jwtSecret string, tokenVersions mw.TokenVersionLookup) *chi.Mux {
 	r := chi.NewRouter()
 
-	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
+	r.Use(mw.RequestID)
+	r.Use(mw.Recoverer)
+	r.Use(mw.AccessLog)
 	r.Use(cors.Handler(mw.CorsHandler()))
 
 	loginLimiter := mw.NewLoginRateLimiter(10, 15*time.Minute)

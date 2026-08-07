@@ -71,7 +71,7 @@ func (h *Handler) JoinEvent(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusConflict, "conflict", "Event is full")
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to join event")
+		respondInternalError(w, r, err, "Failed to join event")
 		return
 	}
 

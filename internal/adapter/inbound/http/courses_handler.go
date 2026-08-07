@@ -2,7 +2,6 @@ package httphandler
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 
@@ -25,7 +24,7 @@ func mapCourseToResponse(c entity.Course) CourseResponse {
 func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 	courses, err := h.courses.List(r.Context())
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch courses")
+		respondInternalError(w, r, err, "Failed to fetch courses")
 		return
 	}
 
@@ -46,8 +45,7 @@ func (h *Handler) SearchCourses(w http.ResponseWriter, r *http.Request) {
 
 	courses, err := h.courses.Search(r.Context(), query)
 	if err != nil {
-		log.Printf("SearchCourses q=%q: %v", query, err)
-		respondError(w, http.StatusBadGateway, "upstream_error", "Failed to search courses")
+		respondLoggedError(w, r, http.StatusBadGateway, "upstream_error", "Failed to search courses", err)
 		return
 	}
 
@@ -78,7 +76,7 @@ func (h *Handler) FindOrCreateCourse(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.courses.FindOrCreate(r.Context(), c)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create course")
+		respondInternalError(w, r, err, "Failed to create course")
 		return
 	}
 

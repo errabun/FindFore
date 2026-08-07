@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -78,15 +78,21 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("golfcourseapi: non-2xx status=%d url=%s body=%s",
-			resp.StatusCode, apiURL, truncate(body, maxLoggedBodyBytes))
+		slog.Warn("golfcourseapi non-2xx",
+			"status", resp.StatusCode,
+			"url", apiURL,
+			"body", truncate(body, maxLoggedBodyBytes),
+		)
 		return nil, fmt.Errorf("golfcourseapi: unexpected status %d", resp.StatusCode)
 	}
 
 	var apiResp golfCourseAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		log.Printf("golfcourseapi: parse failed url=%s body=%s",
-			apiURL, truncate(body, maxLoggedBodyBytes))
+		slog.Warn("golfcourseapi parse failed",
+			"url", apiURL,
+			"body", truncate(body, maxLoggedBodyBytes),
+			"err", err,
+		)
 		return nil, fmt.Errorf("golfcourseapi: parse response: %w", err)
 	}
 

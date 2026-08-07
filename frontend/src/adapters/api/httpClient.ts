@@ -15,17 +15,20 @@ export const endpoints = {
 export class ApiError extends Error {
   status: number;
   code: string;
+  requestId?: string;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, requestId?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.requestId = requestId;
   }
 }
 
 type ErrorEnvelope = {
   errors?: Array<{ code?: string; message?: string }>;
+  request_id?: string;
 };
 
 let onUnauthorized: (() => void) | null = null;
@@ -45,17 +48,23 @@ export function authHeaders(): Record<string, string> {
 }
 
 async function parseApiError(resp: Response): Promise<ApiError> {
+  const requestId =
+    resp.headers.get('X-Request-ID') ??
+    resp.headers.get('X-Request-Id') ??
+    undefined;
   let code = 'request_failed';
   let message = `Request failed: ${resp.status}`;
+  let bodyRequestId: string | undefined;
   try {
     const body = (await resp.json()) as ErrorEnvelope;
     const first = body.errors?.[0];
     if (first?.code) code = first.code;
     if (first?.message) message = first.message;
+    if (body.request_id) bodyRequestId = body.request_id;
   } catch {
     // keep defaults
   }
-  return new ApiError(resp.status, code, message);
+  return new ApiError(resp.status, code, message, requestId ?? bodyRequestId);
 }
 
 async function handleResponse<T>(resp: Response, { allowUnauthorized = false } = {}): Promise<T> {

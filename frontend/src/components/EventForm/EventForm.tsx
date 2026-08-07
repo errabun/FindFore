@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { courseAdapter } from '../../adapters/api/courseAdapter';
 import { teeTimeAdapter } from '../../adapters/api/teeTimeAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import PostResultMessage from './PostResultMessage';
 import {
   Paper,
@@ -40,6 +41,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
   const [isPrivate, setIsPrivate] = useState(false);
   const [allFriends, setAllFriends] = useState(false);
   const [postError, setPostError] = useState(false);
+  const [postErrorMessage, setPostErrorMessage] = useState('');
   const [postAttempt, setPostAttempt] = useState(false);
 
   // Course search state
@@ -115,6 +117,8 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
     if (!selectedCourse || !teeTime) return;
 
     setPostAttempt(true);
+    setPostError(false);
+    setPostErrorMessage('');
     try {
       const saved = await courseAdapter.findOrCreate({
         name: selectedCourse.name,
@@ -137,8 +141,13 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
         hostId,
         selectedFriends
       );
-    } catch {
+    } catch (err) {
       setPostError(true);
+      setPostErrorMessage(
+        err instanceof ApiError
+          ? err.message
+          : "Sorry, we weren't able to send your event invitation. Please try again later.",
+      );
     }
   };
 
@@ -284,6 +293,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
       {postAttempt && (
         <PostResultMessage
           postError={postError}
+          errorMessage={postErrorMessage}
           refreshEvents={refreshEvents}
         />
       )}

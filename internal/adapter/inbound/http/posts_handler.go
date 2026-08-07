@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
+	"github.com/ericrabun/findfore-go/internal/application/service"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -73,7 +75,7 @@ func (h *Handler) ListPosts(w http.ResponseWriter, r *http.Request) {
 
 	posts, err := h.posts.List(r.Context(), limit, offset)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch posts")
+		respondInternalError(w, r, err, "Failed to fetch posts")
 		return
 	}
 
@@ -104,7 +106,12 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.posts.Create(r.Context(), actorID, req.Body)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create post")
+		var ve *service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
+			return
+		}
+		respondInternalError(w, r, err, "Failed to create post")
 		return
 	}
 
@@ -167,7 +174,7 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 
 	reactions, err := h.posts.ToggleReaction(r.Context(), postID, actorID, req.Emoji)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to toggle reaction")
+		respondInternalError(w, r, err, "Failed to toggle reaction")
 		return
 	}
 
@@ -210,7 +217,12 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 
 	reply, err := h.posts.CreateReply(r.Context(), postID, actorID, req.Body)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create reply")
+		var ve *service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
+			return
+		}
+		respondInternalError(w, r, err, "Failed to create reply")
 		return
 	}
 

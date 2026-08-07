@@ -76,7 +76,7 @@ func (h *Handler) CreateFriendship(w http.ResponseWriter, r *http.Request) {
 	f, requester, addressee, err := h.friendships.Request(r.Context(), actorID, req.PlayerID)
 	if err != nil {
 		status, code, msg := friendshipErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (h *Handler) ListFriendships(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.friendships.ListAccepted(r.Context(), actorID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to list friendships")
+		respondInternalError(w, r, err, "Failed to list friendships")
 		return
 	}
 
@@ -101,12 +101,12 @@ func (h *Handler) ListFriendships(w http.ResponseWriter, r *http.Request) {
 		f := &rows[i]
 		requester, err := h.players.GetWithDetails(r.Context(), int64(f.RequesterID))
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "internal_error", "Failed to load friendship")
+			respondInternalError(w, r, err, "Failed to load friendship")
 			return
 		}
 		addressee, err := h.players.GetWithDetails(r.Context(), int64(f.AddresseeID))
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "internal_error", "Failed to load friendship")
+			respondInternalError(w, r, err, "Failed to load friendship")
 			return
 		}
 		resp = append(resp, mapFriendshipResponse(f, requester, addressee))
@@ -124,7 +124,7 @@ func (h *Handler) ListFriendshipRequests(w http.ResponseWriter, r *http.Request)
 
 	rows, err := h.friendships.ListIncomingRequests(r.Context(), actorID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to list friend requests")
+		respondInternalError(w, r, err, "Failed to list friend requests")
 		return
 	}
 
@@ -133,12 +133,12 @@ func (h *Handler) ListFriendshipRequests(w http.ResponseWriter, r *http.Request)
 		f := &rows[i]
 		requester, err := h.players.GetWithDetails(r.Context(), int64(f.RequesterID))
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "internal_error", "Failed to load friend request")
+			respondInternalError(w, r, err, "Failed to load friend request")
 			return
 		}
 		addressee, err := h.players.GetWithDetails(r.Context(), int64(f.AddresseeID))
 		if err != nil {
-			respondError(w, http.StatusInternalServerError, "internal_error", "Failed to load friend request")
+			respondInternalError(w, r, err, "Failed to load friend request")
 			return
 		}
 		resp = append(resp, mapFriendshipResponse(f, requester, addressee))
@@ -156,7 +156,7 @@ func (h *Handler) ListOutgoingFriendshipRequests(w http.ResponseWriter, r *http.
 
 	ids, err := h.friendships.ListOutgoingPendingIDs(r.Context(), actorID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to list outgoing requests")
+		respondInternalError(w, r, err, "Failed to list outgoing requests")
 		return
 	}
 	if ids == nil {
@@ -181,7 +181,7 @@ func (h *Handler) AcceptFriendship(w http.ResponseWriter, r *http.Request) {
 	f, requester, addressee, err := h.friendships.Accept(r.Context(), actorID, id)
 	if err != nil {
 		status, code, msg := friendshipErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -203,7 +203,7 @@ func (h *Handler) DeclineFriendship(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.friendships.Decline(r.Context(), actorID, id); err != nil {
 		status, code, msg := friendshipErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (h *Handler) DeleteFriendship(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.friendships.CancelOrUnfriend(r.Context(), actorID, id); err != nil {
 		status, code, msg := friendshipErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 

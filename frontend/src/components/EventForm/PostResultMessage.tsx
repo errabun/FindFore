@@ -4,10 +4,11 @@ import { FiCheck, FiAlertTriangle } from 'react-icons/fi';
 
 interface PostResultMessageProps {
   postError: boolean;
+  errorMessage?: string;
   refreshEvents: () => void;
 }
 
-function PostResultMessage({ postError, refreshEvents }: PostResultMessageProps) {
+function PostResultMessage({ postError, errorMessage, refreshEvents }: PostResultMessageProps) {
   return (
     <Modal
       opened
@@ -24,7 +25,8 @@ function PostResultMessage({ postError, refreshEvents }: PostResultMessageProps)
               <FiAlertTriangle size={24} />
             </ThemeIcon>
             <Text ta='center'>
-              Sorry, we weren't able to send your event invitation. Please try again later.
+              {errorMessage ||
+                "Sorry, we weren't able to send your event invitation. Please try again later."}
             </Text>
             <Button component={Link} to='/dashboard' color='forest' variant='light'>
               Back to Dashboard

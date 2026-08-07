@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { courseAdapter } from '../../adapters/api/courseAdapter';
 import { teeTimeAdapter } from '../../adapters/api/teeTimeAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import {
   Paper,
   Select,
@@ -38,6 +39,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
   const [numHoles, setNumHoles] = useState(event.number_of_holes);
   const [isPrivate, setIsPrivate] = useState(event.private);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Friends invite state — pre-check friends already invited (pending/accepted/declined/closed)
   const alreadyInvited = new Set([
@@ -132,6 +134,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
     if (!selectedCourse || !teeTime) return;
 
     setSaving(true);
+    setSaveError('');
     try {
       let courseId = selectedCourse.id;
 
@@ -163,8 +166,11 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
 
       refreshEvents();
       navigate('/dashboard');
-    } catch {
+    } catch (err) {
       setSaving(false);
+      setSaveError(
+        err instanceof ApiError ? err.message : 'Failed to save tee time. Please try again.',
+      );
     }
   };
 
@@ -312,6 +318,11 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
                 Save Changes
               </Button>
             </Group>
+            {saveError && (
+              <Text c='red' size='sm' ta='center'>
+                {saveError}
+              </Text>
+            )}
           </Stack>
         </form>
       </Paper>

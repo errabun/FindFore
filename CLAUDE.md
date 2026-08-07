@@ -86,13 +86,18 @@ Organized by the four pillars defined in `VISION.md`:
 - Prioritize free/cheap APIs, CSV imports (e.g., golfapi.io style), or Google Maps integration. Suggest caching strategies and import pipelines that fit PostgreSQL + sqlc.
 
 ## 7. Testing Strategy
-- For every new feature or potentially breaking change, implement tests.
-- Frontend: React Testing Library (RTL) strongly preferred.
-- Backend: Standard Go testing (with testify if helpful).
-- Focus on:
-  - Domain/hexagonal logic
+- For every new feature or potentially breaking change, implement tests **in the same PR**.
+- **Frontend:** Vitest + React Testing Library (`cd frontend && npm test` / `npm run test:watch`). Prefer testing user-visible behavior; mock at the adapter/port boundary.
+- **Backend:** Go `testing` + testify table tests for services (fake repos) and `httptest` for authz-sensitive HTTP paths (`go test ./...`).
+- **CI:** Cloud Build runs `go test ./...` and `frontend` `npm ci && npm test && npm run build` **before** the Docker image build/deploy. Failures block deploy.
+- **Focus coverage on:**
+  - Domain/hexagonal logic (services)
   - Private vs public tee time rules and invitation flows
-  - Any business logic that affects user trust or data integrity
+  - AuthZ / IDOR paths (JWT actor, host-only mutate, friendship accept/decline)
+  - Login validation and friend-request UI actions
+- **Security-sensitive changes** (authz, privacy, payments later) require a service test and at least one handler/HTTP test.
+- **E2E:** Cypress is reserved for a thin smoke suite later (login → dashboard; friend request) after APIs stabilize — not a substitute for unit/RTL coverage.
+- Conventional commit scopes: `test:`, `chore(ci):`, `feat(security):`.
 
 ## 8. Google Cloud & Infrastructure
 - **Runtime:** Cloud Run service built from repo `Dockerfile` (multi-stage: frontend build → Go binary → distroless).
@@ -102,6 +107,7 @@ Organized by the four pillars defined in `VISION.md`:
 - **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
 - **Domain:** `findfore.com` (registered via GoDaddy). Map to Cloud Run once the app is live (Cloud Run → Manage custom domains, then update GoDaddy DNS). Use `findfore.com` (or `www.findfore.com`) in CORS `ALLOWED_ORIGINS`, PWA manifest `start_url`, and share links once mapped.
 - **Cost hygiene:** Cloud Run scales to zero. Cloud SQL is scheduled via `scripts/gcp-sql-schedule.sh` (weekday 8am–8pm America/Denver). Storage + public IP still bill when stopped. Use `./scripts/gcp-sql-schedule.sh start|stop` for off-hours work.
+- **Logging:** The Go server emits **JSON `log/slog`** to stdout (Cloud Run → Cloud Logging). Every request gets an `X-Request-ID` (honors inbound id or `X-Cloud-Trace-Context`). 5xx responses log the underlying `err` with `request_id` / `player_id` / route; panics are recovered and logged with stack. In Logs Explorer, filter on `jsonPayload.msg="handler_error"` or severity≥ERROR. Optional: create a log-based alert on `severity>=ERROR`. Skip Error Reporting SDK until volume justifies it.
 - Leverage Google services (Auth, Maps, etc.) where they provide good integration or cost benefits.
 
 ## 9. Collaboration & Prompting Rules for Claude

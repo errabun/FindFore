@@ -92,7 +92,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.events.List(r.Context(), actorID, forPlayerID, publicOnly)
 	if err != nil {
 		status, code, msg := eventErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *Handler) GetEvent(w http.ResponseWriter, r *http.Request) {
 	event, err := h.events.Get(r.Context(), id, actorID)
 	if err != nil {
 		status, code, msg := eventErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -193,7 +193,7 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	event, err := h.events.Create(r.Context(), e, req.Invitees)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create event")
+		respondInternalError(w, r, err, "Failed to create event")
 		return
 	}
 
@@ -255,10 +255,7 @@ func (h *Handler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	event, err := h.events.Update(r.Context(), actorID, e, req.Invitees)
 	if err != nil {
 		status, code, msg := eventErrorStatus(err)
-		if status == http.StatusInternalServerError {
-			msg = "Failed to update event"
-		}
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -281,7 +278,7 @@ func (h *Handler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.events.Delete(r.Context(), actorID, id); err != nil {
 		status, code, msg := eventErrorStatus(err)
-		respondError(w, status, code, msg)
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -308,7 +305,7 @@ func (h *Handler) ListFriendsEvents(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.events.ListFriendsEvents(r.Context(), actorID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch friends events")
+		respondInternalError(w, r, err, "Failed to fetch friends events")
 		return
 	}
 

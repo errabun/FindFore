@@ -59,7 +59,7 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 
 	players, err := h.players.List(r.Context())
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch players")
+		respondInternalError(w, r, err, "Failed to fetch players")
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to create player")
+		respondInternalError(w, r, err, "Failed to create player")
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *Handler) UpdatePlayer(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to update player")
+		respondInternalError(w, r, err, "Failed to update player")
 		return
 	}
 
@@ -196,7 +196,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to change password")
+		respondInternalError(w, r, err, "Failed to change password")
 		return
 	}
 

@@ -20,6 +20,24 @@ substitutions:
   _DB_USER: findfore
 
 steps:
+  # 0. Fail fast on unit tests before building/pushing an image.
+  - name: golang:1.25
+    id: go-test
+    entrypoint: go
+    args: ['test', './...']
+
+  - name: node:22
+    id: frontend-test
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        cd frontend
+        npm ci
+        npm test
+        npm run build
+
   # 1. Build the multi-stage container.
   # $BUILD_ID is always set (both manual `gcloud builds submit` and trigger runs).
   # $COMMIT_SHA is only populated by triggers, so avoid it for portability.
