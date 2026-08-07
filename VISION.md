@@ -1,6 +1,6 @@
 # FindFore — North Star Vision
 
-**Last Updated:** August 06, 2026  
+**Last Updated:** August 07, 2026  
 **Status:** Living document — the strategic reference for all product and architectural decisions.
 
 ---
@@ -245,13 +245,28 @@ Because we are building toward a platform — not a booking widget — every arc
 | Event-driven notifications (future) | Group coordination flow depends on real-time alerts |
 | Activity/history persistence | Network effect moat requires users' golf history to live here permanently |
 
-**Refer to `CLAUDE.md` for implementation standards and tech stack constraints.**
+**Refer to [`CLAUDE.md`](./CLAUDE.md) for implementation standards and tech stack constraints.**  
+**Refer to [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system diagrams and architecture principles.**
+
+---
+
+## Feature Success Criteria
+
+Every feature should satisfy **at least one** of these outcomes. If it maps to none, it does not belong in FindFore (or needs to be reframed until it does):
+
+- **Increase rounds played** — help golfers get on the course more often
+- **Reduce booking friction** — make finding and locking in a tee time easier
+- **Strengthen golf friendships** — deepen connections and make playing together simpler
+- **Encourage return visits** — give people a reason to open the app between rounds
+- **Create permanent golf history** — capture identity, scores, and social memory that compounds over time
+
+These criteria sit alongside the four pillars: pillars describe *where* a feature lives; these criteria describe *why it is worth building*.
 
 ---
 
 ## How to Use This Document
 
-- **Starting a new feature?** Identify which pillar(s) it serves and which roadmap phase it belongs to.
+- **Starting a new feature?** Identify which pillar(s) it serves, which roadmap phase it belongs to, and which success criterion above it satisfies.
 - **Evaluating a design?** Ask: does this feel like part of organizing your golf life, or like a disconnected transaction?
 - **Making an architecture choice?** Ask: will this still work when we add playing, identity, and multi-provider booking?
-- **Prioritizing work?** Group coordination and social retention come before booking polish. Booking provider integration comes when social coordination is solid.
+- **Prioritizing work?** Group coordination and social retention come before booking polish. Booking provider integration comes when social coordination is solid. If two options both fit a pillar, prefer the one that more clearly hits a success criterion.

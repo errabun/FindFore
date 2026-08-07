@@ -1,13 +1,14 @@
 # FindFore Development Guidelines for Claude
 
-**Last Updated:** August 06, 2026
+**Last Updated:** August 07, 2026
 **Project Name:** FindFore
 **Repository:** https://github.com/errabun/FindFore
 **Version:** 1.0
 
 ## 1. Project Overview & Vision
 
-> **See [`VISION.md`](./VISION.md) for the full north star, roadmap, and strategic context.**
+> **See [`VISION.md`](./VISION.md) for the full north star, roadmap, and strategic context.**  
+> **See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for system diagrams and architecture principles.**
 
 - **One-Line Pitch:** The operating system for golfers — not a booking app. Booking is infrastructure; the product is where golfers organize their entire golf life.
 - **Core Purpose:** A mobile-first platform spanning four pillars — **Social**, **Booking**, **Playing**, and **Golf Identity** — that replaces the fragmented golf ecosystem (separate apps for handicaps, scores, GPS, booking, coordination).
@@ -19,13 +20,27 @@
 **Every feature, UI decision, and code change must support the four-pillar vision in `VISION.md`. When in doubt, prioritize social retention and group coordination over booking polish.**
 
 ## 2. Architecture Principles (Non-Negotiable)
-- **Hexagonal Architecture (Ports & Adapters):** Apply strictly on both backend (Go) and frontend (TypeScript/React).
-  - Domain layer holds all business rules (tee time creation, privacy (private vs public), invitations, RSVPs, vacancies, social interactions).
-  - Ports define interfaces for external concerns.
-  - Adapters implement ports (PostgreSQL via sqlc, Google services, Mantine UI, Redux, etc.).
+
+Apply Hexagonal Architecture at system boundaries (database, booking providers, notifications, payments, storage, maps, external APIs). Avoid unnecessary abstractions inside simple domain code.
+
+- **Ports & Adapters at the edges:** Domain holds business rules (tee time creation, privacy (private vs public), invitations, RSVPs, vacancies, social interactions). Ports define interfaces for external concerns; adapters implement them (PostgreSQL via sqlc, Google services, Mantine UI, Redux, etc.).
 - **DRY Principle:** Aggressively eliminate duplication across layers. Extract reusable domain services, utilities, ports, and UI components.
-- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `cmd/`, etc.). Evolve it toward full hexagonal without unnecessary disruption.
+- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `cmd/`, etc.). Evolve toward hexagonal at boundaries without unnecessary disruption.
 - **Clean Separation:** Business logic must stay in domain; never leak into UI, DB, or infrastructure.
+
+### Guiding principles
+
+**Principle 1 — Optimize for deleting code.**  
+The best feature is the one you never had to write.
+
+**Principle 2 — Every external service gets an adapter.**  
+Today that includes Lightspeed, Google Maps, Google Auth, Stripe, SendGrid, and push notifications. Tomorrow you can swap providers without rewriting business logic.
+
+**Principle 3 — Business logic owns the truth.**  
+Never let SQL, React, or external APIs make business decisions.
+
+**Principle 4 — Everything is observable.**  
+Every important action should answer: Who? What? When? How long? Did it succeed?
 
 ## 3. Tech Stack (Locked In)
 - **Frontend:** React + TypeScript, mobile-first (PWA-capable, responsive design). Use **Mantine** as the sole component library — always reference the latest Mantine v7+ documentation for components, themes, hooks, and patterns.
@@ -38,7 +53,7 @@
 - **Google Cloud:** Use services where beneficial (Auth, Maps, Cloud SQL for PostgreSQL, Storage, Pub/Sub for notifications, etc.). Developer account: errabun@gmail.com.
 - **Other:** Offline/responsive considerations for mobile golf use (poor signal on courses).
 
-**Never introduce new libraries, frameworks, or major stack changes without explicit approval.**
+**Major architectural libraries require approval.** Small utility libraries are acceptable when they reduce complexity and are actively maintained.
 
 ## 4. UI/UX & Design Responsibility
 - You (Claude) serve as the design lead. Deliver fresh, modern, premium golf-inspired interfaces that feel energetic and community-oriented.
@@ -102,6 +117,7 @@ Organized by the four pillars defined in `VISION.md`:
 ## 8. Google Cloud & Infrastructure
 - **Runtime:** Cloud Run service built from repo `Dockerfile` (multi-stage: frontend build → Go binary → distroless).
 - **Database:** Cloud SQL PostgreSQL via Unix socket (`INSTANCE_CONNECTION_NAME`, `DB_USER`, `DB_PASS`, `DB_NAME`) or `DATABASE_URL` for local dev.
+- **Migrations are immutable.** Never edit an old migration — always create a new one. Every migration should be reversible when practical (`migrations/*.up.sql` + matching `*.down.sql`). Local: `go run ./cmd/migrate -direction up`. Cloud SQL: `./scripts/gcp-migrate.sh`.
 - **Deploy:** `cloudbuild.yaml` builds image, pushes to Artifact Registry, deploys to Cloud Run. Connect repo in Cloud Console or use `gcloud builds submit`.
 - **Secrets:** JWT, DB password, API keys in Secret Manager — never in the image or repo.
 - **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
@@ -111,7 +127,7 @@ Organized by the four pillars defined in `VISION.md`:
 - Leverage Google services (Auth, Maps, etc.) where they provide good integration or cost benefits.
 
 ## 9. Collaboration & Prompting Rules for Claude
-- **Always reference this file and `VISION.md`** at the start of sessions or major tasks.
+- **Always reference this file, `VISION.md`, and `ARCHITECTURE.md`** at the start of sessions or major tasks.
 - When told "refer to guidelines," quote relevant sections.
 - Think step-by-step: show reasoning for hexagonal ports/adapters, DRY refactors, Mantine usage, and design proposals.
 - For design: Provide modern Mantine code examples with multiple options when choices exist.
