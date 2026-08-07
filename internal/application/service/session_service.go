@@ -28,30 +28,30 @@ func (s *SessionService) Login(ctx context.Context, login, password string) (*en
 	login = strings.ToLower(strings.TrimSpace(login))
 
 	var player *entity.Player
+	userFound := false
 
-	// Try email first, then username
-	p, err := s.players.GetByEmail(ctx, login)
-	if err == nil {
+	if p, err := s.players.GetByEmail(ctx, login); err == nil {
 		player = p
-	} else {
-		p, err = s.players.GetByUsername(ctx, login)
-		if err == nil {
-			player = p
-		} else {
-			return nil, "", fmt.Errorf("invalid email/username or password")
-		}
+		userFound = true
+	} else if p, err := s.players.GetByUsername(ctx, login); err == nil {
+		player = p
+		userFound = true
 	}
 
-	if !auth.CheckPassword(password, player.PasswordDigest) {
+	digest := ""
+	if userFound {
+		digest = player.PasswordDigest
+	}
+
+	if !auth.CheckPasswordTimingSafe(password, digest, userFound) {
 		return nil, "", fmt.Errorf("invalid email/username or password")
 	}
 
-	token, err := auth.GenerateToken(player.ID, s.jwtSecret)
+	token, err := auth.GenerateToken(player.ID, player.TokenVersion, s.jwtSecret)
 	if err != nil {
 		return nil, "", fmt.Errorf("generate token: %w", err)
 	}
 
-	// Build player with details
 	friendIDs, err := s.friendships.ListAcceptedFriendIDs(ctx, int32(player.ID))
 	if err != nil {
 		return nil, "", fmt.Errorf("list friend IDs: %w", err)

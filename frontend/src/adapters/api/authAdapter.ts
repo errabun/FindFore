@@ -1,17 +1,20 @@
 import type { Player, LoginResponse, UpdateProfileRequest, ChangePasswordRequest } from '../../domain/auth/types';
 import type { AuthPort } from '../../ports/authPort';
-import { endpoints, request, requestVoid } from './httpClient';
+import { endpoints, request, requestVoid, requestPublic, ApiError } from './httpClient';
 
 export const authAdapter: AuthPort = {
-  login(login: string, password: string): Promise<LoginResponse | undefined> {
-    return fetch(endpoints.sessions, {
-      method: 'POST',
-      body: JSON.stringify({ login, password }),
-      headers: { 'Content-Type': 'application/json' },
-    }).then(resp => {
-      if (resp.ok) return resp.json();
+  async login(login: string, password: string): Promise<LoginResponse | undefined> {
+    try {
+      return await requestPublic<LoginResponse>(endpoints.sessions, {
+        method: 'POST',
+        body: JSON.stringify({ login, password }),
+      });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 429)) {
+        throw err;
+      }
       return undefined;
-    });
+    }
   },
 
   createProfile(
@@ -22,7 +25,7 @@ export const authAdapter: AuthPort = {
     password: string,
     passwordConfirmation: string,
   ): Promise<Player> {
-    return fetch(endpoints.players, {
+    return requestPublic<Player>(endpoints.players, {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -32,10 +35,6 @@ export const authAdapter: AuthPort = {
         password,
         password_confirmation: passwordConfirmation,
       }),
-      headers: { 'Content-Type': 'application/json' },
-    }).then(resp => {
-      if (resp.ok) return resp.json();
-      throw new Error('Unable to create new profile, please try again!');
     });
   },
 

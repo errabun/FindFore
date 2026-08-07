@@ -52,7 +52,7 @@ func (q *Queries) CreatePlayer(ctx context.Context, arg CreatePlayerParams) (Cre
 }
 
 const getPlayerByEmail = `-- name: GetPlayerByEmail :one
-SELECT id, name, phone, email, username, password_digest
+SELECT id, name, phone, email, username, password_digest, token_version
 FROM players
 WHERE email = $1
 `
@@ -64,6 +64,7 @@ type GetPlayerByEmailRow struct {
 	Email          sql.NullString
 	Username       sql.NullString
 	PasswordDigest sql.NullString
+	TokenVersion   int32
 }
 
 func (q *Queries) GetPlayerByEmail(ctx context.Context, email sql.NullString) (GetPlayerByEmailRow, error) {
@@ -76,6 +77,7 @@ func (q *Queries) GetPlayerByEmail(ctx context.Context, email sql.NullString) (G
 		&i.Email,
 		&i.Username,
 		&i.PasswordDigest,
+		&i.TokenVersion,
 	)
 	return i, err
 }
@@ -108,7 +110,7 @@ func (q *Queries) GetPlayerByID(ctx context.Context, id int64) (GetPlayerByIDRow
 }
 
 const getPlayerByUsername = `-- name: GetPlayerByUsername :one
-SELECT id, name, phone, email, username, password_digest
+SELECT id, name, phone, email, username, password_digest, token_version
 FROM players
 WHERE username = $1
 `
@@ -120,6 +122,7 @@ type GetPlayerByUsernameRow struct {
 	Email          sql.NullString
 	Username       sql.NullString
 	PasswordDigest sql.NullString
+	TokenVersion   int32
 }
 
 func (q *Queries) GetPlayerByUsername(ctx context.Context, username sql.NullString) (GetPlayerByUsernameRow, error) {
@@ -132,6 +135,7 @@ func (q *Queries) GetPlayerByUsername(ctx context.Context, username sql.NullStri
 		&i.Email,
 		&i.Username,
 		&i.PasswordDigest,
+		&i.TokenVersion,
 	)
 	return i, err
 }
@@ -147,6 +151,19 @@ func (q *Queries) GetPlayerPasswordByID(ctx context.Context, id int64) (sql.Null
 	var password_digest sql.NullString
 	err := row.Scan(&password_digest)
 	return password_digest, err
+}
+
+const getPlayerTokenVersion = `-- name: GetPlayerTokenVersion :one
+SELECT token_version
+FROM players
+WHERE id = $1
+`
+
+func (q *Queries) GetPlayerTokenVersion(ctx context.Context, id int64) (int32, error) {
+	row := q.db.QueryRowContext(ctx, getPlayerTokenVersion, id)
+	var token_version int32
+	err := row.Scan(&token_version)
+	return token_version, err
 }
 
 const listPlayers = `-- name: ListPlayers :many
@@ -236,7 +253,7 @@ func (q *Queries) UpdatePlayer(ctx context.Context, arg UpdatePlayerParams) (Upd
 
 const updatePlayerPassword = `-- name: UpdatePlayerPassword :exec
 UPDATE players
-SET password_digest = $2, updated_at = NOW()
+SET password_digest = $2, token_version = token_version + 1, updated_at = NOW()
 WHERE id = $1
 `
 

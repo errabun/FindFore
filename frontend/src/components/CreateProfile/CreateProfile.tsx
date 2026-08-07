@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { authAdapter } from '../../adapters/api/authAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import { Paper, TextInput, PasswordInput, Button, Title, Stack, Text, Center, Divider, Box } from '@mantine/core';
 import { GiGolfTee } from 'react-icons/gi';
 import { useNavigate } from 'react-router-dom';
@@ -12,18 +13,28 @@ function CreateProfile() {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [formError, setFormError] = useState('');
 
   const submitProfile = () => {
-    if (confirmSamePW()) {
-      authAdapter.createProfile(name, phone, email, userName, password, passwordConfirm)
-        .then(() => navigate('/login', { replace: true }));
-    } else {
-      alert('Passwords do not match, please try again!');
+    setFormError('');
+    if (password !== passwordConfirm) {
+      setFormError('Passwords do not match, please try again!');
+      return;
     }
-  };
-
-  const confirmSamePW = () => {
-    return password === passwordConfirm;
+    if (password.length < 8) {
+      setFormError('Password must be at least 8 characters');
+      return;
+    }
+    authAdapter
+      .createProfile(name, phone, email, userName, password, passwordConfirm)
+      .then(() => navigate('/login', { replace: true }))
+      .catch((err) => {
+        if (err instanceof ApiError) {
+          setFormError(err.message);
+          return;
+        }
+        setFormError('Unable to create new profile, please try again!');
+      });
   };
 
   return (
@@ -43,6 +54,11 @@ function CreateProfile() {
           </Stack>
 
           <Stack gap='md'>
+            {formError && (
+              <Text c='red.6' size='sm' ta='center'>
+                {formError}
+              </Text>
+            )}
             <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }}>Personal Info</Text>
             <TextInput
               label='Full Name'
@@ -88,6 +104,7 @@ function CreateProfile() {
             />
             <PasswordInput
               label='Password'
+              description='At least 8 characters'
               id='password'
               name='password'
               value={password}

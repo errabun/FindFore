@@ -60,6 +60,7 @@ func (r *PlayerRepo) GetByEmail(ctx context.Context, email string) (*entity.Play
 		Email:          row.Email.String,
 		Username:       row.Username.String,
 		PasswordDigest: row.PasswordDigest.String,
+		TokenVersion:   row.TokenVersion,
 	}, nil
 }
 
@@ -75,6 +76,7 @@ func (r *PlayerRepo) GetByUsername(ctx context.Context, username string) (*entit
 		Email:          row.Email.String,
 		Username:       row.Username.String,
 		PasswordDigest: row.PasswordDigest.String,
+		TokenVersion:   row.TokenVersion,
 	}, nil
 }
 
@@ -124,6 +126,10 @@ func (r *PlayerRepo) GetPasswordByID(ctx context.Context, id int64) (string, err
 		return "", err
 	}
 	return digest.String, nil
+}
+
+func (r *PlayerRepo) GetTokenVersion(ctx context.Context, id int64) (int32, error) {
+	return r.q.GetPlayerTokenVersion(ctx, id)
 }
 
 func (r *PlayerRepo) UpdatePassword(ctx context.Context, id int64, passwordDigest string) error {

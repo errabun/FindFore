@@ -53,7 +53,7 @@ func main() {
 
 	// HTTP handler + router
 	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc)
-	r := httphandler.NewRouter(h, cfg.JWTSecret)
+	r := httphandler.NewRouter(h, cfg.JWTSecret, playerRepo)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server starting on %s", addr)

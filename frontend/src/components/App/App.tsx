@@ -152,6 +152,7 @@ function App() {
                     player={currentPlayer}
                     onUpdateProfile={updateProfile}
                     onChangePassword={changePassword}
+                    onPasswordChanged={logout}
                   />
                 ) : null;
               })()

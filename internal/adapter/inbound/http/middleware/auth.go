@@ -12,6 +12,11 @@ type contextKey string
 
 const PlayerIDKey contextKey = "player_id"
 
+// TokenVersionLookup loads the current token_version for a player (password-change invalidation).
+type TokenVersionLookup interface {
+	GetTokenVersion(ctx context.Context, playerID int64) (int32, error)
+}
+
 // PlayerIDFromContext returns the authenticated player id when present.
 func PlayerIDFromContext(ctx context.Context) (int64, bool) {
 	id, ok := ctx.Value(PlayerIDKey).(int64)
@@ -22,33 +27,52 @@ func PlayerIDFromContext(ctx context.Context) (int64, bool) {
 }
 
 // AuthOptional parses a Bearer JWT when present. Invalid/missing tokens continue
-// without a player id (for public routes).
+// without a player id (for public routes). Does not check token_version.
 func AuthOptional(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, _ := authenticate(r, jwtSecret)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			ctx, ok := parseBearer(r, jwtSecret)
+			if ok {
+				r = r.WithContext(ctx)
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-// AuthRequired requires a valid Bearer JWT. Responds 401 otherwise.
-func AuthRequired(jwtSecret string) func(http.Handler) http.Handler {
+// AuthRequired requires a valid Bearer JWT whose token_version matches the DB.
+func AuthRequired(jwtSecret string, versions TokenVersionLookup) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, ok := authenticate(r, jwtSecret)
+			ctx, ok := parseBearer(r, jwtSecret)
 			if !ok {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"errors":[{"code":"unauthorized","message":"Authentication required"}]}`))
+				writeUnauthorized(w)
 				return
 			}
+
+			playerID, _ := PlayerIDFromContext(ctx)
+			claimsVersion := tokenVersionFromContext(ctx)
+			current, err := versions.GetTokenVersion(ctx, playerID)
+			if err != nil || current != claimsVersion {
+				writeUnauthorized(w)
+				return
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func authenticate(r *http.Request, jwtSecret string) (context.Context, bool) {
+type tokenVersionKeyType contextKey
+
+const tokenVersionKey tokenVersionKeyType = "token_version"
+
+func tokenVersionFromContext(ctx context.Context) int32 {
+	v, _ := ctx.Value(tokenVersionKey).(int32)
+	return v
+}
+
+func parseBearer(r *http.Request, jwtSecret string) (context.Context, bool) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return r.Context(), false
@@ -59,10 +83,18 @@ func authenticate(r *http.Request, jwtSecret string) (context.Context, bool) {
 		return r.Context(), false
 	}
 
-	playerID, err := auth.ValidateToken(parts[1], jwtSecret)
+	claims, err := auth.ValidateToken(parts[1], jwtSecret)
 	if err != nil {
 		return r.Context(), false
 	}
 
-	return context.WithValue(r.Context(), PlayerIDKey, playerID), true
+	ctx := context.WithValue(r.Context(), PlayerIDKey, claims.PlayerID)
+	ctx = context.WithValue(ctx, tokenVersionKey, claims.TokenVersion)
+	return ctx, true
+}
+
+func writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"errors":[{"code":"unauthorized","message":"Authentication required"}]}`))
 }

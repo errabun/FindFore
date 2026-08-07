@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -13,18 +14,20 @@ import (
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
 )
 
-func NewRouter(h *Handler, jwtSecret string) *chi.Mux {
+func NewRouter(h *Handler, jwtSecret string, tokenVersions mw.TokenVersionLookup) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(cors.Handler(mw.CorsHandler()))
 
+	loginLimiter := mw.NewLoginRateLimiter(10, 15*time.Minute)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public routes (no JWT required)
 		r.Group(func(r chi.Router) {
 			r.Use(mw.AuthOptional(jwtSecret))
-			r.Post("/sessions", h.CreateSession)
+			r.With(loginLimiter.Middleware).Post("/sessions", h.CreateSession)
 			r.Post("/players", h.CreatePlayer)
 			r.Get("/courses", h.ListCourses)
 			r.Get("/courses/search", h.SearchCourses)
@@ -32,7 +35,7 @@ func NewRouter(h *Handler, jwtSecret string) *chi.Mux {
 
 		// Authenticated routes
 		r.Group(func(r chi.Router) {
-			r.Use(mw.AuthRequired(jwtSecret))
+			r.Use(mw.AuthRequired(jwtSecret, tokenVersions))
 
 			r.Post("/courses", h.FindOrCreateCourse)
 

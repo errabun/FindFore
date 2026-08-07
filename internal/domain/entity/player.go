@@ -7,6 +7,7 @@ type Player struct {
 	Email          string
 	Username       string
 	PasswordDigest string
+	TokenVersion   int32
 }
 
 type PlayerWithDetails struct {

@@ -17,15 +17,17 @@ import {
 import { useMantineColorScheme } from '@mantine/core';
 import { FiSun, FiMoon, FiMonitor, FiCheck, FiAlertCircle } from 'react-icons/fi';
 import { setColorScheme as persistColorScheme } from '../../adapters/storage/localStorageAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import type { Player, UpdateProfileRequest, ChangePasswordRequest } from '../../types';
 
 interface ProfileProps {
   player: Player;
   onUpdateProfile: (data: UpdateProfileRequest) => Promise<void>;
   onChangePassword: (data: ChangePasswordRequest) => Promise<void>;
+  onPasswordChanged?: () => void;
 }
 
-function Profile({ player, onUpdateProfile, onChangePassword }: ProfileProps) {
+function Profile({ player, onUpdateProfile, onChangePassword, onPasswordChanged }: ProfileProps) {
   // Personal info
   const [name, setName] = useState(player.name);
   const [phone, setPhone] = useState(player.phone);
@@ -50,8 +52,10 @@ function Profile({ player, onUpdateProfile, onChangePassword }: ProfileProps) {
     try {
       await onUpdateProfile({ name, phone, email, username });
       setProfileMessage({ type: 'success', text: 'Profile updated successfully' });
-    } catch {
-      setProfileMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
+    } catch (err) {
+      const text =
+        err instanceof ApiError ? err.message : 'Failed to update profile. Please try again.';
+      setProfileMessage({ type: 'error', text });
     } finally {
       setSavingProfile(false);
     }
@@ -62,6 +66,10 @@ function Profile({ player, onUpdateProfile, onChangePassword }: ProfileProps) {
       setPasswordMessage({ type: 'error', text: 'New passwords do not match' });
       return;
     }
+    if (newPassword.length < 8) {
+      setPasswordMessage({ type: 'error', text: 'Password must be at least 8 characters' });
+      return;
+    }
     setSavingPassword(true);
     setPasswordMessage(null);
     try {
@@ -70,12 +78,20 @@ function Profile({ player, onUpdateProfile, onChangePassword }: ProfileProps) {
         new_password: newPassword,
         password_confirmation: confirmPassword,
       });
-      setPasswordMessage({ type: 'success', text: 'Password changed successfully' });
+      setPasswordMessage({
+        type: 'success',
+        text: 'Password changed. Please sign in again with your new password.',
+      });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch {
-      setPasswordMessage({ type: 'error', text: 'Failed to change password. Check your current password.' });
+      onPasswordChanged?.();
+    } catch (err) {
+      const text =
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to change password. Check your current password.';
+      setPasswordMessage({ type: 'error', text });
     } finally {
       setSavingPassword(false);
     }
@@ -182,6 +198,7 @@ function Profile({ player, onUpdateProfile, onChangePassword }: ProfileProps) {
           />
           <PasswordInput
             label='New Password'
+            description='At least 8 characters'
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required

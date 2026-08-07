@@ -93,8 +93,8 @@ func (s *PlayerService) Create(ctx context.Context, name, phone, email, username
 	if username == "" {
 		return nil, &ValidationError{Message: "Username can't be blank"}
 	}
-	if password == "" {
-		return nil, &ValidationError{Message: "Password can't be blank"}
+	if err := auth.ValidatePasswordStrength(password); err != nil {
+		return nil, &ValidationError{Message: err.Error()}
 	}
 	if password != passwordConfirmation {
 		return nil, &ValidationError{Message: "Password confirmation doesn't match Password"}
@@ -170,8 +170,8 @@ func (s *PlayerService) ChangePassword(ctx context.Context, callerID int64, curr
 	if currentPassword == "" {
 		return &ValidationError{Message: "Current password can't be blank"}
 	}
-	if newPassword == "" {
-		return &ValidationError{Message: "New password can't be blank"}
+	if err := auth.ValidatePasswordStrength(newPassword); err != nil {
+		return &ValidationError{Message: err.Error()}
 	}
 	if newPassword != passwordConfirmation {
 		return &ValidationError{Message: "Password confirmation doesn't match"}

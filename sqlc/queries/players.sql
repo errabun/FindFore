@@ -9,14 +9,19 @@ FROM players
 WHERE id = $1;
 
 -- name: GetPlayerByEmail :one
-SELECT id, name, phone, email, username, password_digest
+SELECT id, name, phone, email, username, password_digest, token_version
 FROM players
 WHERE email = $1;
 
 -- name: GetPlayerByUsername :one
-SELECT id, name, phone, email, username, password_digest
+SELECT id, name, phone, email, username, password_digest, token_version
 FROM players
 WHERE username = $1;
+
+-- name: GetPlayerTokenVersion :one
+SELECT token_version
+FROM players
+WHERE id = $1;
 
 -- name: CreatePlayer :one
 INSERT INTO players (name, phone, email, username, password_digest, created_at, updated_at)
@@ -31,7 +36,7 @@ RETURNING id, name, phone, email, username;
 
 -- name: UpdatePlayerPassword :exec
 UPDATE players
-SET password_digest = $2, updated_at = NOW()
+SET password_digest = $2, token_version = token_version + 1, updated_at = NOW()
 WHERE id = $1;
 
 -- name: GetPlayerPasswordByID :one

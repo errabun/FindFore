@@ -55,6 +55,8 @@ func mapPlayerToPublicResponse(p entity.PlayerWithDetails) PlayerResponse {
 }
 
 func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
+	actorID, _ := mw.PlayerIDFromContext(r.Context())
+
 	players, err := h.players.List(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "internal_error", "Failed to fetch players")
@@ -63,7 +65,11 @@ func (h *Handler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]PlayerResponse, len(players))
 	for i, p := range players {
-		resp[i] = mapPlayerToPublicResponse(p)
+		if p.ID == actorID {
+			resp[i] = mapPlayerToResponse(p)
+		} else {
+			resp[i] = mapPlayerToPublicResponse(p)
+		}
 	}
 
 	respondJSON(w, http.StatusOK, resp)

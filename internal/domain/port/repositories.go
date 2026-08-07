@@ -15,6 +15,7 @@ type PlayerRepository interface {
 	Update(ctx context.Context, p entity.Player) (*entity.Player, error)
 	GetPasswordByID(ctx context.Context, id int64) (string, error)
 	UpdatePassword(ctx context.Context, id int64, passwordDigest string) error
+	GetTokenVersion(ctx context.Context, id int64) (int32, error)
 	ListIDsExcept(ctx context.Context, excludeID int64) ([]int64, error)
 }
 

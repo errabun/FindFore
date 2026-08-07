@@ -53,6 +53,7 @@ type Player struct {
 	PasswordDigest sql.NullString
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	TokenVersion   int32
 }
 
 type PlayerEvent struct {

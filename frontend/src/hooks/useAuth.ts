@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Player, UpdateProfileRequest, ChangePasswordRequest } from '../domain/auth/types';
 import { authAdapter } from '../adapters/api/authAdapter';
+import { ApiError, setUnauthorizedHandler } from '../adapters/api/httpClient';
 import {
   getPlayerIdFromToken,
   isSessionActive,
@@ -17,6 +18,19 @@ export function useAuth() {
   const [loginError, setLoginError] = useState('');
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
 
+  const logout = useCallback(() => {
+    clearSession();
+    setHostPlayer(0);
+    setAllPlayers([]);
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
+
   const validateLogin = (email: string, password: string) => {
     setLoginError('');
     authAdapter
@@ -31,31 +45,32 @@ export function useAuth() {
           setToken(data.token);
         }
         touchActivity();
-        // Refresh player graph so friend lists reflect follows made this session
-        // before a full page reload (needed for Available → Friends filtering).
         try {
           const players = await authAdapter.getAllPlayers();
           setAllPlayers(players);
         } catch {
-          // Keep stale list; dashboard still works with prior snapshot
+          // Keep empty list; dashboard still works for the signed-in user
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err instanceof ApiError) {
+          setLoginError(err.message);
+          return;
+        }
         setLoginError('Unable to sign in right now. Please try again.');
       });
   };
 
-  const logout = useCallback(() => {
-    clearSession();
-    setHostPlayer(0);
-  }, []);
-
   const clearLoginError = useCallback(() => setLoginError(''), []);
 
-  // Load all players on mount
+  // Load community players only when authenticated (endpoint requires JWT).
   useEffect(() => {
-    authAdapter.getAllPlayers().then(setAllPlayers);
-  }, []);
+    if (!hostPlayer) {
+      setAllPlayers([]);
+      return;
+    }
+    authAdapter.getAllPlayers().then(setAllPlayers).catch(() => setAllPlayers([]));
+  }, [hostPlayer]);
 
   // Track activity and enforce session timeout
   useEffect(() => {
