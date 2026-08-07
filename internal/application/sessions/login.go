@@ -1,4 +1,4 @@
-package service
+package sessions
 
 import (
 	"context"
@@ -7,24 +7,9 @@ import (
 
 	"github.com/ericrabun/findfore-go/internal/auth"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
-	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
-type SessionService struct {
-	players     port.PlayerRepository
-	friendships port.FriendshipRepository
-	jwtSecret   string
-}
-
-func NewSessionService(players port.PlayerRepository, friendships port.FriendshipRepository, jwtSecret string) *SessionService {
-	return &SessionService{
-		players:     players,
-		friendships: friendships,
-		jwtSecret:   jwtSecret,
-	}
-}
-
-func (s *SessionService) Login(ctx context.Context, login, password string) (*entity.PlayerWithDetails, string, error) {
+func (s *Service) Login(ctx context.Context, login, password string) (*entity.PlayerWithDetails, string, error) {
 	login = strings.ToLower(strings.TrimSpace(login))
 
 	var player *entity.Player

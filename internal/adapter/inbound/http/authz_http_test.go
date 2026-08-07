@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	httphandler "github.com/ericrabun/findfore-go/internal/adapter/inbound/http"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/events"
+	"github.com/ericrabun/findfore-go/internal/application/friends"
 	"github.com/ericrabun/findfore-go/internal/auth"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -57,20 +58,20 @@ func (stubEvents) List(context.Context, int64, *int64, bool) ([]entity.EventWith
 	return nil, nil
 }
 func (stubEvents) Get(context.Context, int64, int64) (*entity.EventWithDetails, error) {
-	return nil, service.ErrEventNotFound
+	return nil, events.ErrEventNotFound
 }
 func (stubEvents) Create(context.Context, entity.Event, []int64) (*entity.EventWithDetails, error) {
 	return nil, nil
 }
 func (stubEvents) Update(_ context.Context, actorID int64, e entity.Event, _ []int64) (*entity.EventWithDetails, error) {
 	if actorID != 1 {
-		return nil, service.ErrEventForbidden
+		return nil, events.ErrEventForbidden
 	}
 	return &entity.EventWithDetails{ID: e.ID, HostID: 1, CourseName: "Test", Date: e.Date, TeeTime: e.TeeTime, OpenSpots: e.OpenSpots, NumberOfHoles: e.NumberOfHoles}, nil
 }
 func (stubEvents) Delete(_ context.Context, actorID, _ int64) error {
 	if actorID != 1 {
-		return service.ErrEventForbidden
+		return events.ErrEventForbidden
 	}
 	return nil
 }
@@ -204,7 +205,7 @@ func TestDeleteEventForbiddenForNonHost(t *testing.T) {
 }
 
 func TestAcceptFriendshipForbiddenMapsTo403(t *testing.T) {
-	r := testRouter(stubFriendships{acceptErr: service.ErrFriendshipForbidden})
+	r := testRouter(stubFriendships{acceptErr: friends.ErrFriendshipForbidden})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/friendships/9/accept", nil)
 	req.Header.Set("Authorization", bearer(1))
 	rec := httptest.NewRecorder()

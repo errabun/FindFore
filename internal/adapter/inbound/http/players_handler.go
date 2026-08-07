@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/apperr"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -93,7 +93,7 @@ func (h *Handler) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 
 	player, err := h.players.Create(r.Context(), req.Name, req.Phone, req.Email, req.Username, req.Password, req.PasswordConfirmation)
 	if err != nil {
-		var ve *service.ValidationError
+		var ve *apperr.ValidationError
 		if errors.As(err, &ve) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
@@ -148,7 +148,7 @@ func (h *Handler) UpdatePlayer(w http.ResponseWriter, r *http.Request) {
 
 	player, err := h.players.Update(r.Context(), callerID, req.Name, req.Phone, req.Email, req.Username)
 	if err != nil {
-		var ve *service.ValidationError
+		var ve *apperr.ValidationError
 		if errors.As(err, &ve) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
@@ -191,7 +191,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.players.ChangePassword(r.Context(), callerID, req.CurrentPassword, req.NewPassword, req.PasswordConfirmation); err != nil {
-		var ve *service.ValidationError
+		var ve *apperr.ValidationError
 		if errors.As(err, &ve) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return

@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/friends"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -41,15 +41,15 @@ func mapFriendshipResponse(
 
 func friendshipErrorStatus(err error) (int, string, string) {
 	switch {
-	case errors.Is(err, service.ErrFriendshipNotFound):
+	case errors.Is(err, friends.ErrFriendshipNotFound):
 		return http.StatusNotFound, "not_found", "Friendship not found"
-	case errors.Is(err, service.ErrFriendshipForbidden):
+	case errors.Is(err, friends.ErrFriendshipForbidden):
 		return http.StatusForbidden, "forbidden", "Not allowed to modify this friendship"
-	case errors.Is(err, service.ErrFriendshipSelf):
+	case errors.Is(err, friends.ErrFriendshipSelf):
 		return http.StatusBadRequest, "bad_request", "Cannot create friendship with yourself"
-	case errors.Is(err, service.ErrFriendshipAlreadyFriends):
+	case errors.Is(err, friends.ErrFriendshipAlreadyFriends):
 		return http.StatusConflict, "conflict", "Already friends"
-	case errors.Is(err, service.ErrFriendshipAlreadyPending):
+	case errors.Is(err, friends.ErrFriendshipAlreadyPending):
 		return http.StatusConflict, "conflict", "Friend request already pending"
 	default:
 		return http.StatusInternalServerError, "internal_error", "Friendship operation failed"

@@ -10,7 +10,12 @@ import (
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/golfcourseapi"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/courses"
+	"github.com/ericrabun/findfore-go/internal/application/events"
+	"github.com/ericrabun/findfore-go/internal/application/feed"
+	"github.com/ericrabun/findfore-go/internal/application/friends"
+	"github.com/ericrabun/findfore-go/internal/application/players"
+	"github.com/ericrabun/findfore-go/internal/application/sessions"
 	"github.com/ericrabun/findfore-go/internal/config"
 )
 
@@ -32,10 +37,8 @@ func main() {
 	}
 	defer db.Close()
 
-	// sqlc queries
 	queries := sqlcgen.New(db)
 
-	// Repository adapters
 	playerRepo := postgres.NewPlayerRepo(queries)
 	courseRepo := postgres.NewCourseRepo(queries)
 	eventRepo := postgres.NewEventRepo(queries, db)
@@ -45,19 +48,16 @@ func main() {
 	reactionRepo := postgres.NewReactionRepo(queries)
 	replyRepo := postgres.NewReplyRepo(queries)
 
-	// External adapters
 	golfCourseClient := golfcourseapi.NewClient(os.Getenv("GOLF_COURSE_API_KEY"))
 
-	// Application services
-	playerSvc := service.NewPlayerService(playerRepo, friendshipRepo)
-	sessionSvc := service.NewSessionService(playerRepo, friendshipRepo, cfg.JWTSecret)
-	courseSvc := service.NewCourseService(courseRepo, golfCourseClient)
-	eventSvc := service.NewEventService(eventRepo, playerEventRepo)
-	playerEventSvc := service.NewPlayerEventService(playerEventRepo, eventRepo)
-	friendshipSvc := service.NewFriendshipService(friendshipRepo, playerSvc)
-	postSvc := service.NewPostService(postRepo, reactionRepo, replyRepo)
+	playerSvc := players.NewService(playerRepo, friendshipRepo)
+	sessionSvc := sessions.NewService(playerRepo, friendshipRepo, cfg.JWTSecret)
+	courseSvc := courses.NewService(courseRepo, golfCourseClient)
+	eventSvc := events.NewService(eventRepo, playerEventRepo)
+	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo)
+	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
+	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo)
 
-	// HTTP handler + router
 	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc)
 	r := httphandler.NewRouter(h, cfg.JWTSecret, playerRepo)
 

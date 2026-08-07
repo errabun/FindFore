@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/apperr"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -106,7 +106,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.posts.Create(r.Context(), actorID, req.Body)
 	if err != nil {
-		var ve *service.ValidationError
+		var ve *apperr.ValidationError
 		if errors.As(err, &ve) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return
@@ -217,7 +217,7 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 
 	reply, err := h.posts.CreateReply(r.Context(), postID, actorID, req.Body)
 	if err != nil {
-		var ve *service.ValidationError
+		var ve *apperr.ValidationError
 		if errors.As(err, &ve) {
 			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
 			return

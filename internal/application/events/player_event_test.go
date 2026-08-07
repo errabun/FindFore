@@ -1,4 +1,4 @@
-package service_test
+package events_test
 
 import (
 	"context"
@@ -8,16 +8,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
 func TestPlayerEventJoinSuccess(t *testing.T) {
-	events := newFakeEventRepo()
+	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := service.NewPlayerEventService(playerEvents, events)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 
-	events.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 2, Private: false}
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 2, Private: false}
 	playerEvents.acceptedCount[10] = 0
 
 	pe, err := svc.JoinEvent(context.Background(), 5, 10)
@@ -28,12 +28,12 @@ func TestPlayerEventJoinSuccess(t *testing.T) {
 }
 
 func TestPlayerEventJoinRejectsFullAndDuplicate(t *testing.T) {
-	events := newFakeEventRepo()
+	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := service.NewPlayerEventService(playerEvents, events)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 	ctx := context.Background()
 
-	events.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 1}
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 1}
 	playerEvents.acceptedCount[10] = 1
 
 	_, err := svc.JoinEvent(ctx, 5, 10)
@@ -48,11 +48,11 @@ func TestPlayerEventJoinRejectsFullAndDuplicate(t *testing.T) {
 }
 
 func TestPlayerEventUpdateStatusClosesWhenFull(t *testing.T) {
-	events := newFakeEventRepo()
+	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := service.NewPlayerEventService(playerEvents, events)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 
-	events.byID[3] = &entity.Event{ID: 3, HostID: 1, OpenSpots: 1}
+	eventRepo.byID[3] = &entity.Event{ID: 3, HostID: 1, OpenSpots: 1}
 	playerEvents.acceptedCount[3] = 0
 	playerEvents.existing[playerEventKey{2, 3}] = true
 

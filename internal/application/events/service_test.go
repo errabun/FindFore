@@ -1,4 +1,4 @@
-package service_test
+package events_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -95,12 +95,12 @@ func (r *fakePlayerEventRepo) ClosePendingForEvent(context.Context, int64) error
 func (r *fakePlayerEventRepo) ReopenClosedForEvent(context.Context, int64) error { return nil }
 
 func TestEventGetPrivateVisibility(t *testing.T) {
-	events := newFakeEventRepo()
+	eventRepo := newFakeEventRepo()
 	playerEvents := newFakePlayerEventRepo()
-	svc := service.NewEventService(events, playerEvents)
+	svc := events.NewService(eventRepo, playerEvents)
 
-	events.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4}
-	events.details[10] = &entity.EventWithDetails{
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4}
+	eventRepo.details[10] = &entity.EventWithDetails{
 		ID: 10, HostID: 1, Private: true, OpenSpots: 4,
 	}
 	playerEvents.byStatus[10] = map[entity.InviteStatus][]int64{
@@ -115,27 +115,27 @@ func TestEventGetPrivateVisibility(t *testing.T) {
 	if _, err := svc.Get(ctx, 10, 2); err != nil {
 		t.Fatalf("invitee should view private event: %v", err)
 	}
-	if _, err := svc.Get(ctx, 10, 3); !errors.Is(err, service.ErrEventNotFound) {
+	if _, err := svc.Get(ctx, 10, 3); !errors.Is(err, events.ErrEventNotFound) {
 		t.Fatalf("stranger should get not found, got %v", err)
 	}
 }
 
 func TestEventUpdateDeleteHostOnly(t *testing.T) {
-	events := newFakeEventRepo()
+	eventRepo := newFakeEventRepo()
 	playerEvents := newFakePlayerEventRepo()
-	svc := service.NewEventService(events, playerEvents)
+	svc := events.NewService(eventRepo, playerEvents)
 
-	events.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1}
-	events.details[5] = &entity.EventWithDetails{
+	eventRepo.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1}
+	eventRepo.details[5] = &entity.EventWithDetails{
 		ID: 5, HostID: 1, Private: false, OpenSpots: 4,
 	}
 
 	ctx := context.Background()
 	_, err := svc.Update(ctx, 2, entity.Event{ID: 5, CourseID: 1, Date: "2099-01-01", TeeTime: "08:00", OpenSpots: 4, NumberOfHoles: "18"}, nil)
-	if !errors.Is(err, service.ErrEventForbidden) {
+	if !errors.Is(err, events.ErrEventForbidden) {
 		t.Fatalf("expected forbidden update, got %v", err)
 	}
-	if err := svc.Delete(ctx, 2, 5); !errors.Is(err, service.ErrEventForbidden) {
+	if err := svc.Delete(ctx, 2, 5); !errors.Is(err, events.ErrEventForbidden) {
 		t.Fatalf("expected forbidden delete, got %v", err)
 	}
 	if err := svc.Delete(ctx, 1, 5); err != nil {
@@ -144,10 +144,10 @@ func TestEventUpdateDeleteHostOnly(t *testing.T) {
 }
 
 func TestEventListCannotReadAnotherPlayersEvents(t *testing.T) {
-	svc := service.NewEventService(newFakeEventRepo(), newFakePlayerEventRepo())
+	svc := events.NewService(newFakeEventRepo(), newFakePlayerEventRepo())
 	other := int64(99)
 	_, err := svc.List(context.Background(), 1, &other, false)
-	if !errors.Is(err, service.ErrEventForbidden) {
+	if !errors.Is(err, events.ErrEventForbidden) {
 		t.Fatalf("expected forbidden, got %v", err)
 	}
 }

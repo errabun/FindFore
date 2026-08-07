@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -50,9 +50,9 @@ func mapEventToResponse(e entity.EventWithDetails) EventResponse {
 
 func eventErrorStatus(err error) (int, string, string) {
 	switch {
-	case errors.Is(err, service.ErrEventNotFound):
+	case errors.Is(err, events.ErrEventNotFound):
 		return http.StatusNotFound, "not_found", "Event not found"
-	case errors.Is(err, service.ErrEventForbidden):
+	case errors.Is(err, events.ErrEventForbidden):
 		return http.StatusForbidden, "forbidden", "Not allowed to access this event"
 	default:
 		return http.StatusInternalServerError, "internal_error", "Event operation failed"

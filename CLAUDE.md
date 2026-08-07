@@ -25,7 +25,7 @@ Apply Hexagonal Architecture at system boundaries (database, booking providers, 
 
 - **Ports & Adapters at the edges:** Domain holds business rules (tee time creation, privacy (private vs public), invitations, RSVPs, vacancies, social interactions). Ports define interfaces for external concerns; adapters implement them (PostgreSQL via sqlc, Google services, Mantine UI, Redux, etc.).
 - **DRY Principle:** Aggressively eliminate duplication across layers. Extract reusable domain services, utilities, ports, and UI components.
-- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `cmd/`, etc.). Evolve toward hexagonal at boundaries without unnecessary disruption.
+- **Existing Structure Respect:** Build upon the current repo layout (`frontend/`, `internal/`, `migrations/`, `sqlc/`, `cmd/`, etc.). Application use cases live under `internal/application/{players,sessions,courses,events,feed,friends,booking,...}` with action-oriented files (`service.go`, `create.go`, …) that grow as each domain matures. Evolve toward hexagonal at boundaries without unnecessary disruption.
 - **Clean Separation:** Business logic must stay in domain; never leak into UI, DB, or infrastructure.
 
 ### Guiding principles

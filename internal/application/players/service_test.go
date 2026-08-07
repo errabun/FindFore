@@ -1,4 +1,4 @@
-package service_test
+package players_test
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/apperr"
+	"github.com/ericrabun/findfore-go/internal/application/players"
 	"github.com/ericrabun/findfore-go/internal/auth"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -128,9 +129,122 @@ func (r *fakePlayerRepo) ListIDsExcept(_ context.Context, excludeID int64) ([]in
 	return ids, nil
 }
 
+type fakeFriendshipRepo struct {
+	nextID int64
+	byID   map[int64]*entity.Friendship
+}
+
+func newFakeFriendshipRepo() *fakeFriendshipRepo {
+	return &fakeFriendshipRepo{
+		nextID: 1,
+		byID:   make(map[int64]*entity.Friendship),
+	}
+}
+
+func (r *fakeFriendshipRepo) GetByID(_ context.Context, id int64) (*entity.Friendship, error) {
+	f, ok := r.byID[id]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	cp := *f
+	return &cp, nil
+}
+
+func (r *fakeFriendshipRepo) Find(_ context.Context, requesterID, addresseeID int32) (*entity.Friendship, error) {
+	for _, f := range r.byID {
+		if f.RequesterID == requesterID && f.AddresseeID == addresseeID {
+			cp := *f
+			return &cp, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (r *fakeFriendshipRepo) FindBetween(_ context.Context, playerA, playerB int32) (*entity.Friendship, error) {
+	for _, f := range r.byID {
+		if (f.RequesterID == playerA && f.AddresseeID == playerB) ||
+			(f.RequesterID == playerB && f.AddresseeID == playerA) {
+			cp := *f
+			return &cp, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (r *fakeFriendshipRepo) Create(_ context.Context, requesterID, addresseeID int32, status entity.FriendshipStatus) (*entity.Friendship, error) {
+	f := &entity.Friendship{
+		ID:          r.nextID,
+		RequesterID: requesterID,
+		AddresseeID: addresseeID,
+		Status:      status,
+	}
+	r.nextID++
+	r.byID[f.ID] = f
+	cp := *f
+	return &cp, nil
+}
+
+func (r *fakeFriendshipRepo) UpdateStatus(_ context.Context, id int64, status entity.FriendshipStatus) (*entity.Friendship, error) {
+	f, ok := r.byID[id]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	f.Status = status
+	cp := *f
+	return &cp, nil
+}
+
+func (r *fakeFriendshipRepo) DeleteByID(_ context.Context, id int64) error {
+	if _, ok := r.byID[id]; !ok {
+		return sql.ErrNoRows
+	}
+	delete(r.byID, id)
+	return nil
+}
+
+func (r *fakeFriendshipRepo) ListAcceptedFriendIDs(_ context.Context, playerID int32) ([]int64, error) {
+	var ids []int64
+	for _, f := range r.byID {
+		if f.Status != entity.FriendshipStatusAccepted {
+			continue
+		}
+		if f.RequesterID == playerID {
+			ids = append(ids, int64(f.AddresseeID))
+		} else if f.AddresseeID == playerID {
+			ids = append(ids, int64(f.RequesterID))
+		}
+	}
+	return ids, nil
+}
+
+func (r *fakeFriendshipRepo) ListIncomingPending(_ context.Context, addresseeID int32) ([]entity.Friendship, error) {
+	var out []entity.Friendship
+	for _, f := range r.byID {
+		if f.AddresseeID == addresseeID && f.Status == entity.FriendshipStatusPending {
+			out = append(out, *f)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeFriendshipRepo) ListOutgoingPending(_ context.Context, requesterID int32) ([]entity.Friendship, error) {
+	var out []entity.Friendship
+	for _, f := range r.byID {
+		if f.RequesterID == requesterID && f.Status == entity.FriendshipStatusPending {
+			out = append(out, *f)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeFriendshipRepo) ListAcceptedEventIDs(_ context.Context, _ int64) ([]int64, error) {
+	return nil, nil
+}
+
+
 func TestPlayerCreateValidation(t *testing.T) {
 	repo := newFakePlayerRepo()
-	svc := service.NewPlayerService(repo, newFakeFriendshipRepo())
+	svc := players.NewService(repo, newFakeFriendshipRepo())
 
 	tests := []struct {
 		name    string
@@ -148,7 +262,7 @@ func TestPlayerCreateValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := svc.Create(context.Background(), "Golfer", "555", tt.email, "golfer1", tt.pass, tt.confirm)
 			require.Error(t, err)
-			var ve *service.ValidationError
+			var ve *apperr.ValidationError
 			require.ErrorAs(t, err, &ve)
 			assert.Contains(t, ve.Message, tt.wantMsg)
 		})
@@ -157,7 +271,7 @@ func TestPlayerCreateValidation(t *testing.T) {
 
 func TestPlayerCreateSuccessAndDuplicateEmail(t *testing.T) {
 	repo := newFakePlayerRepo()
-	svc := service.NewPlayerService(repo, newFakeFriendshipRepo())
+	svc := players.NewService(repo, newFakeFriendshipRepo())
 	ctx := context.Background()
 
 	p, err := svc.Create(ctx, "Golfer", "555-0100", "golfer@example.com", "golfer1", "password1", "password1")
@@ -166,14 +280,14 @@ func TestPlayerCreateSuccessAndDuplicateEmail(t *testing.T) {
 	assert.Equal(t, "golfer@example.com", p.Email)
 
 	_, err = svc.Create(ctx, "Other", "555-0101", "golfer@example.com", "other1", "password1", "password1")
-	var ve *service.ValidationError
+	var ve *apperr.ValidationError
 	require.ErrorAs(t, err, &ve)
 	assert.Contains(t, ve.Message, "Email has already been taken")
 }
 
 func TestPlayerChangePassword(t *testing.T) {
 	repo := newFakePlayerRepo()
-	svc := service.NewPlayerService(repo, newFakeFriendshipRepo())
+	svc := players.NewService(repo, newFakeFriendshipRepo())
 	ctx := context.Background()
 
 	hash, err := auth.HashPassword("oldpass12")
@@ -181,7 +295,7 @@ func TestPlayerChangePassword(t *testing.T) {
 	repo.byID[1] = &entity.Player{ID: 1, PasswordDigest: hash, TokenVersion: 0}
 
 	err = svc.ChangePassword(ctx, 1, "wrongpass", "newpass12", "newpass12")
-	var ve *service.ValidationError
+	var ve *apperr.ValidationError
 	require.ErrorAs(t, err, &ve)
 	assert.Contains(t, ve.Message, "incorrect")
 

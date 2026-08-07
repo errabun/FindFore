@@ -1,4 +1,4 @@
-package service_test
+package friends_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ericrabun/findfore-go/internal/application/service"
+	"github.com/ericrabun/findfore-go/internal/application/friends"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -142,7 +142,7 @@ func (fakePlayerSvc) ChangePassword(context.Context, int64, string, string, stri
 
 func TestFriendshipRequestCreatesPending(t *testing.T) {
 	repo := newFakeFriendshipRepo()
-	svc := service.NewFriendshipService(repo, fakePlayerSvc{})
+	svc := friends.NewService(repo, fakePlayerSvc{})
 
 	f, _, _, err := svc.Request(context.Background(), 1, 2)
 	if err != nil {
@@ -157,16 +157,16 @@ func TestFriendshipRequestCreatesPending(t *testing.T) {
 }
 
 func TestFriendshipRequestSelfRejected(t *testing.T) {
-	svc := service.NewFriendshipService(newFakeFriendshipRepo(), fakePlayerSvc{})
+	svc := friends.NewService(newFakeFriendshipRepo(), fakePlayerSvc{})
 	_, _, _, err := svc.Request(context.Background(), 1, 1)
-	if !errors.Is(err, service.ErrFriendshipSelf) {
+	if !errors.Is(err, friends.ErrFriendshipSelf) {
 		t.Fatalf("expected ErrFriendshipSelf, got %v", err)
 	}
 }
 
 func TestFriendshipAcceptDeclineCancelUnfriend(t *testing.T) {
 	repo := newFakeFriendshipRepo()
-	svc := service.NewFriendshipService(repo, fakePlayerSvc{})
+	svc := friends.NewService(repo, fakePlayerSvc{})
 	ctx := context.Background()
 
 	pending, _, _, err := svc.Request(ctx, 1, 2)
@@ -174,7 +174,7 @@ func TestFriendshipAcceptDeclineCancelUnfriend(t *testing.T) {
 		t.Fatalf("request: %v", err)
 	}
 
-	if _, _, _, err := svc.Accept(ctx, 1, pending.ID); !errors.Is(err, service.ErrFriendshipForbidden) {
+	if _, _, _, err := svc.Accept(ctx, 1, pending.ID); !errors.Is(err, friends.ErrFriendshipForbidden) {
 		t.Fatalf("requester should not accept: %v", err)
 	}
 
@@ -212,7 +212,7 @@ func TestFriendshipAcceptDeclineCancelUnfriend(t *testing.T) {
 
 func TestFriendshipReversePendingAutoAccepts(t *testing.T) {
 	repo := newFakeFriendshipRepo()
-	svc := service.NewFriendshipService(repo, fakePlayerSvc{})
+	svc := friends.NewService(repo, fakePlayerSvc{})
 	ctx := context.Background()
 
 	pending, _, _, err := svc.Request(ctx, 1, 2)
@@ -233,13 +233,13 @@ func TestFriendshipReversePendingAutoAccepts(t *testing.T) {
 }
 
 func TestFriendshipDuplicatePendingRejected(t *testing.T) {
-	svc := service.NewFriendshipService(newFakeFriendshipRepo(), fakePlayerSvc{})
+	svc := friends.NewService(newFakeFriendshipRepo(), fakePlayerSvc{})
 	ctx := context.Background()
 	if _, _, _, err := svc.Request(ctx, 1, 2); err != nil {
 		t.Fatalf("request: %v", err)
 	}
 	_, _, _, err := svc.Request(ctx, 1, 2)
-	if !errors.Is(err, service.ErrFriendshipAlreadyPending) {
+	if !errors.Is(err, friends.ErrFriendshipAlreadyPending) {
 		t.Fatalf("expected already pending, got %v", err)
 	}
 }

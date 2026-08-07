@@ -111,9 +111,34 @@ flowchart TB
 
 ---
 
+## Application packages
+
+Use cases live under `internal/application/<domain>/`, one Go package per domain. Prefer **action-oriented files** that grow as the domain matures:
+
+```text
+internal/application/booking/
+  service.go          # Service + constructor
+  book.go
+  cancel.go
+  availability.go
+  dto.go              # only when entities are not enough
+```
+
+| Package | Role today |
+|---|---|
+| `players`, `sessions`, `courses`, `events`, `feed`, `friends` | Live application services |
+| `booking` | Scaffold for provider booking (Lightspeed / ForeUP / GolfNow) |
+| `groups`, `notifications` | Reserved; fill in as those pillars land |
+| `apperr` | Shared validation errors only |
+
+Do not invent abstractions early — split files and add DTOs when a domain earns them.
+
+---
+
 ## How to Use This Document
 
 - **Adding a provider?** Implement the provider interface; do not branch vendor logic into the frontend or booking service.
 - **Changing booking UX?** Stay above the Go API — provider details stay behind the adapter.
 - **Building social features?** Trace them through this loop — connection → return visit → round → history → identity.
+- **Growing a domain?** Add action files under its `internal/application/<domain>/` package; keep HTTP handlers thin.
 - **Drawing a new system?** Prefer a short mermaid diagram here; keep implementation detail in code and `CLAUDE.md`.
