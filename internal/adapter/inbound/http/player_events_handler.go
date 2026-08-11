@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
@@ -63,12 +64,16 @@ func (h *Handler) JoinEvent(w http.ResponseWriter, r *http.Request) {
 
 	pe, err := h.playerEvents.JoinEvent(r.Context(), actorID, req.EventID)
 	if err != nil {
-		if err.Error() == "player is already part of this event" {
+		if errors.Is(err, entity.ErrAlreadyOnEvent) {
 			respondError(w, http.StatusConflict, "conflict", "Player is already part of this event")
 			return
 		}
-		if err.Error() == "event is full" {
+		if errors.Is(err, entity.ErrEventFull) {
 			respondError(w, http.StatusConflict, "conflict", "Event is full")
+			return
+		}
+		if errors.Is(err, entity.ErrEventMissing) {
+			respondError(w, http.StatusNotFound, "not_found", "Event not found")
 			return
 		}
 		respondInternalError(w, r, err, "Failed to join event")

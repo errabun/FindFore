@@ -40,3 +40,9 @@ WHERE player_id = $1 AND invite_status = 1;
 
 -- name: ListPlayersExceptHost :many
 SELECT id FROM players WHERE id != $1;
+
+-- name: LockEventOpenSpots :one
+SELECT open_spots
+FROM events
+WHERE id = $1
+FOR UPDATE;

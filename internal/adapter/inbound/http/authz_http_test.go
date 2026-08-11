@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,13 +110,18 @@ func (stubCourses) FindOrCreate(context.Context, entity.Course) (*entity.Course,
 	return nil, nil
 }
 
-type stubPlayerEvents struct{}
+type stubPlayerEvents struct {
+	joinErr error
+}
 
-func (stubPlayerEvents) UpdateStatus(context.Context, int64, int64, string) (*entity.PlayerEvent, error) {
+func (s stubPlayerEvents) UpdateStatus(context.Context, int64, int64, string) (*entity.PlayerEvent, error) {
 	return nil, nil
 }
-func (stubPlayerEvents) JoinEvent(context.Context, int64, int64) (*entity.PlayerEvent, error) {
-	return nil, nil
+func (s stubPlayerEvents) JoinEvent(context.Context, int64, int64) (*entity.PlayerEvent, error) {
+	if s.joinErr != nil {
+		return nil, s.joinErr
+	}
+	return &entity.PlayerEvent{ID: 1, PlayerID: 1, EventID: 10, InviteStatus: entity.InviteStatusAccepted}, nil
 }
 
 type stubFriendships struct {
@@ -146,7 +152,11 @@ func (s stubFriendships) ListAccepted(context.Context, int32) ([]entity.Friendsh
 }
 
 func testRouter(friendships stubFriendships) http.Handler {
-	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, stubPlayerEvents{}, friendships, stubPosts{})
+	return testRouterWith(stubPlayerEvents{}, friendships)
+}
+
+func testRouterWith(playerEvents stubPlayerEvents, friendships stubFriendships) http.Handler {
+	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, playerEvents, friendships, stubPosts{})
 	return httphandler.NewRouter(h, testJWTSecret, stubTokenVersions{versions: map[int64]int32{1: 0, 2: 0}})
 }
 
@@ -211,4 +221,14 @@ func TestAcceptFriendshipForbiddenMapsTo403(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestJoinEventConflictMapsTo409(t *testing.T) {
+	r := testRouterWith(stubPlayerEvents{joinErr: entity.ErrEventFull}, stubFriendships{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/player-event/join", strings.NewReader(`{"event_id":10}`))
+	req.Header.Set("Authorization", bearer(1))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
 }

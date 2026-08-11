@@ -47,6 +47,8 @@ type PlayerEventRepository interface {
 	CountAcceptedForEvent(ctx context.Context, eventID int64) (int64, error)
 	ClosePendingForEvent(ctx context.Context, eventID int64) error
 	ReopenClosedForEvent(ctx context.Context, eventID int64) error
+	// JoinAccepted locks the event row, enforces capacity, and inserts an accepted membership atomically.
+	JoinAccepted(ctx context.Context, playerID, eventID int64) (*entity.PlayerEvent, error)
 }
 
 type FriendshipRepository interface {

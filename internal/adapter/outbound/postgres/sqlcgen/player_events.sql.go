@@ -16,7 +16,7 @@ SET invite_status = 3, updated_at = NOW()
 WHERE event_id = $1 AND invite_status = 0
 `
 
-func (q *Queries) ClosePendingForEvent(ctx context.Context, eventID sql.NullInt64) error {
+func (q *Queries) ClosePendingForEvent(ctx context.Context, eventID int64) error {
 	_, err := q.db.ExecContext(ctx, closePendingForEvent, eventID)
 	return err
 }
@@ -26,7 +26,7 @@ SELECT COUNT(*) FROM player_events
 WHERE event_id = $1 AND invite_status = 1
 `
 
-func (q *Queries) CountAcceptedForEvent(ctx context.Context, eventID sql.NullInt64) (int64, error) {
+func (q *Queries) CountAcceptedForEvent(ctx context.Context, eventID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countAcceptedForEvent, eventID)
 	var count int64
 	err := row.Scan(&count)
@@ -40,16 +40,16 @@ RETURNING id, player_id, event_id, invite_status
 `
 
 type CreatePlayerEventParams struct {
-	PlayerID     sql.NullInt64
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
 }
 
 type CreatePlayerEventRow struct {
 	ID           int64
-	PlayerID     sql.NullInt64
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
 }
 
 func (q *Queries) CreatePlayerEvent(ctx context.Context, arg CreatePlayerEventParams) (CreatePlayerEventRow, error) {
@@ -71,15 +71,15 @@ WHERE player_id = $1 AND event_id = $2
 `
 
 type GetPlayerEventParams struct {
-	PlayerID sql.NullInt64
-	EventID  sql.NullInt64
+	PlayerID int64
+	EventID  int64
 }
 
 type GetPlayerEventRow struct {
 	ID           int64
-	PlayerID     sql.NullInt64
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
 }
 
 func (q *Queries) GetPlayerEvent(ctx context.Context, arg GetPlayerEventParams) (GetPlayerEventRow, error) {
@@ -100,15 +100,15 @@ FROM player_events
 WHERE player_id = $1 AND invite_status = 1
 `
 
-func (q *Queries) ListAcceptedEventIDsByPlayerID(ctx context.Context, playerID sql.NullInt64) ([]sql.NullInt64, error) {
+func (q *Queries) ListAcceptedEventIDsByPlayerID(ctx context.Context, playerID int64) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listAcceptedEventIDsByPlayerID, playerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []sql.NullInt64
+	var items []int64
 	for rows.Next() {
-		var event_id sql.NullInt64
+		var event_id int64
 		if err := rows.Scan(&event_id); err != nil {
 			return nil, err
 		}
@@ -130,19 +130,19 @@ WHERE event_id = $1 AND invite_status = $2
 `
 
 type ListPlayerIDsByEventAndStatusParams struct {
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	EventID      int64
+	InviteStatus int32
 }
 
-func (q *Queries) ListPlayerIDsByEventAndStatus(ctx context.Context, arg ListPlayerIDsByEventAndStatusParams) ([]sql.NullInt64, error) {
+func (q *Queries) ListPlayerIDsByEventAndStatus(ctx context.Context, arg ListPlayerIDsByEventAndStatusParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listPlayerIDsByEventAndStatus, arg.EventID, arg.InviteStatus)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []sql.NullInt64
+	var items []int64
 	for rows.Next() {
-		var player_id sql.NullInt64
+		var player_id int64
 		if err := rows.Scan(&player_id); err != nil {
 			return nil, err
 		}
@@ -184,13 +184,27 @@ func (q *Queries) ListPlayersExceptHost(ctx context.Context, id int64) ([]int64,
 	return items, nil
 }
 
+const lockEventOpenSpots = `-- name: LockEventOpenSpots :one
+SELECT open_spots
+FROM events
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) LockEventOpenSpots(ctx context.Context, id int64) (sql.NullInt32, error) {
+	row := q.db.QueryRowContext(ctx, lockEventOpenSpots, id)
+	var open_spots sql.NullInt32
+	err := row.Scan(&open_spots)
+	return open_spots, err
+}
+
 const reopenClosedForEvent = `-- name: ReopenClosedForEvent :exec
 UPDATE player_events
 SET invite_status = 0, updated_at = NOW()
 WHERE event_id = $1 AND invite_status = 3
 `
 
-func (q *Queries) ReopenClosedForEvent(ctx context.Context, eventID sql.NullInt64) error {
+func (q *Queries) ReopenClosedForEvent(ctx context.Context, eventID int64) error {
 	_, err := q.db.ExecContext(ctx, reopenClosedForEvent, eventID)
 	return err
 }
@@ -203,16 +217,16 @@ RETURNING id, player_id, event_id, invite_status
 `
 
 type UpdatePlayerEventStatusParams struct {
-	PlayerID     sql.NullInt64
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
 }
 
 type UpdatePlayerEventStatusRow struct {
 	ID           int64
-	PlayerID     sql.NullInt64
-	EventID      sql.NullInt64
-	InviteStatus sql.NullInt32
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
 }
 
 func (q *Queries) UpdatePlayerEventStatus(ctx context.Context, arg UpdatePlayerEventStatusParams) (UpdatePlayerEventStatusRow, error) {

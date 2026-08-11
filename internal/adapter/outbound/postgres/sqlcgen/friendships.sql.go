@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"database/sql"
 )
 
 const createFriendship = `-- name: CreateFriendship :one
@@ -17,15 +16,15 @@ RETURNING id, requester_id, addressee_id, status
 `
 
 type CreateFriendshipParams struct {
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
 type CreateFriendshipRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
@@ -58,14 +57,14 @@ WHERE requester_id = $1 AND addressee_id = $2
 `
 
 type FindFriendshipParams struct {
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 }
 
 type FindFriendshipRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
@@ -90,14 +89,14 @@ LIMIT 1
 `
 
 type FindFriendshipBetweenParams struct {
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 }
 
 type FindFriendshipBetweenRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
@@ -121,8 +120,8 @@ WHERE id = $1
 
 type GetFriendshipByIDRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
@@ -142,21 +141,21 @@ const listAcceptedFriendIDs = `-- name: ListAcceptedFriendIDs :many
 SELECT CASE
     WHEN requester_id = $1 THEN addressee_id
     ELSE requester_id
-END::integer AS friend_id
+END::bigint AS friend_id
 FROM friendships
 WHERE status = 1
   AND (requester_id = $1 OR addressee_id = $1)
 `
 
-func (q *Queries) ListAcceptedFriendIDs(ctx context.Context, requesterID sql.NullInt32) ([]int32, error) {
+func (q *Queries) ListAcceptedFriendIDs(ctx context.Context, requesterID int64) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listAcceptedFriendIDs, requesterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []int32
+	var items []int64
 	for rows.Next() {
-		var friend_id int32
+		var friend_id int64
 		if err := rows.Scan(&friend_id); err != nil {
 			return nil, err
 		}
@@ -180,12 +179,12 @@ ORDER BY id DESC
 
 type ListIncomingPendingFriendshipsRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
-func (q *Queries) ListIncomingPendingFriendships(ctx context.Context, addresseeID sql.NullInt32) ([]ListIncomingPendingFriendshipsRow, error) {
+func (q *Queries) ListIncomingPendingFriendships(ctx context.Context, addresseeID int64) ([]ListIncomingPendingFriendshipsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listIncomingPendingFriendships, addresseeID)
 	if err != nil {
 		return nil, err
@@ -222,12 +221,12 @@ ORDER BY id DESC
 
 type ListOutgoingPendingFriendshipsRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 
-func (q *Queries) ListOutgoingPendingFriendships(ctx context.Context, requesterID sql.NullInt32) ([]ListOutgoingPendingFriendshipsRow, error) {
+func (q *Queries) ListOutgoingPendingFriendships(ctx context.Context, requesterID int64) ([]ListOutgoingPendingFriendshipsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOutgoingPendingFriendships, requesterID)
 	if err != nil {
 		return nil, err
@@ -269,8 +268,8 @@ type UpdateFriendshipStatusParams struct {
 
 type UpdateFriendshipStatusRow struct {
 	ID          int64
-	RequesterID sql.NullInt32
-	AddresseeID sql.NullInt32
+	RequesterID int64
+	AddresseeID int64
 	Status      int32
 }
 

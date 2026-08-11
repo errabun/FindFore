@@ -34,7 +34,7 @@ WHERE id = $1;
 SELECT CASE
     WHEN requester_id = $1 THEN addressee_id
     ELSE requester_id
-END::integer AS friend_id
+END::bigint AS friend_id
 FROM friendships
 WHERE status = 1
   AND (requester_id = $1 OR addressee_id = $1);

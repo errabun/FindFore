@@ -17,24 +17,24 @@ RETURNING id, course_id, date, tee_time, open_spots, number_of_holes, private, h
 `
 
 type CreateEventParams struct {
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 }
 
 type CreateEventRow struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (CreateEventRow, error) {
@@ -90,13 +90,13 @@ WHERE e.id = $1
 
 type GetEventByIDRow struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 	CourseName    sql.NullString
 	HostName      sql.NullString
 }
@@ -130,13 +130,13 @@ ORDER BY e.id
 
 type ListAllEventsRow struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 	CourseName    sql.NullString
 	HostName      sql.NullString
 }
@@ -188,18 +188,18 @@ ORDER BY e.id
 
 type ListEventsByPlayerIDRow struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 	CourseName    sql.NullString
 	HostName      sql.NullString
 }
 
-func (q *Queries) ListEventsByPlayerID(ctx context.Context, playerID sql.NullInt64) ([]ListEventsByPlayerIDRow, error) {
+func (q *Queries) ListEventsByPlayerID(ctx context.Context, playerID int64) ([]ListEventsByPlayerIDRow, error) {
 	rows, err := q.db.QueryContext(ctx, listEventsByPlayerID, playerID)
 	if err != nil {
 		return nil, err
@@ -257,8 +257,8 @@ AND e.open_spots > (
 `
 
 type ListFriendsAvailableEventIDsParams struct {
-	RequesterID sql.NullInt32
-	PlayerID    sql.NullInt64
+	RequesterID int64
+	PlayerID    int64
 }
 
 func (q *Queries) ListFriendsAvailableEventIDs(ctx context.Context, arg ListFriendsAvailableEventIDsParams) ([]int64, error) {
@@ -296,13 +296,13 @@ ORDER BY e.id
 
 type ListPublicEventsRow struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
-	HostID        sql.NullInt32
+	HostID        int64
 	CourseName    sql.NullString
 	HostName      sql.NullString
 }
@@ -350,7 +350,7 @@ WHERE id = $1
 
 type UpdateEventParams struct {
 	ID            int64
-	CourseID      sql.NullInt32
+	CourseID      int64
 	Date          sql.NullString
 	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32

@@ -68,6 +68,14 @@ flowchart TB
 | Provider Interface | Port that booking adapters implement |
 | Lightspeed / ForeUP / GolfNow | Concrete adapters; swappable without changing the service |
 
+### Social events vs booking inventory
+
+Today’s `events` table is **social round coordination** (host a round, invite friends, fill open spots). It is not provider tee-sheet inventory.
+
+- `events.open_spots` means **capacity** (max accepted players). Remaining spots are derived from accepted `player_events` rows.
+- When booking lands, introduce separate tables such as `tee_times`, `reservations`, and `course_providers(provider, external_id)` rather than overloading `events` with vendor inventory.
+- A social `event` may later *reference* a booked reservation; keep those concerns distinct.
+
 ---
 
 ## Social → Identity Loop

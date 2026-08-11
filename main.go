@@ -42,7 +42,7 @@ func main() {
 	playerRepo := postgres.NewPlayerRepo(queries)
 	courseRepo := postgres.NewCourseRepo(queries)
 	eventRepo := postgres.NewEventRepo(queries, db)
-	playerEventRepo := postgres.NewPlayerEventRepo(queries)
+	playerEventRepo := postgres.NewPlayerEventRepo(queries, db)
 	friendshipRepo := postgres.NewFriendshipRepo(queries)
 	postRepo := postgres.NewPostRepo(queries)
 	reactionRepo := postgres.NewReactionRepo(queries)

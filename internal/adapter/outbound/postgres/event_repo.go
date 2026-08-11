@@ -25,13 +25,13 @@ func (r *EventRepo) GetByID(ctx context.Context, id int64) (*entity.Event, error
 	}
 	return &entity.Event{
 		ID:            row.ID,
-		CourseID:      row.CourseID.Int32,
+		CourseID:      int32(row.CourseID),
 		Date:          row.Date.String,
 		TeeTime:       row.TeeTime.String,
 		OpenSpots:     row.OpenSpots.Int32,
 		NumberOfHoles: row.NumberOfHoles.String,
 		Private:       row.Private.Bool,
-		HostID:        row.HostID.Int32,
+		HostID:        int32(row.HostID),
 	}, nil
 }
 
@@ -49,7 +49,7 @@ func (r *EventRepo) GetDetailsByID(ctx context.Context, id int64) (*entity.Event
 		NumberOfHoles: row.NumberOfHoles.String,
 		Private:       row.Private.Bool,
 		HostName:      row.HostName.String,
-		HostID:        row.HostID.Int32,
+		HostID:        int32(row.HostID),
 	}, nil
 }
 
@@ -78,7 +78,7 @@ func (r *EventRepo) ListPublicIDs(ctx context.Context) ([]int64, error) {
 }
 
 func (r *EventRepo) ListIDsByPlayerID(ctx context.Context, playerID int64) ([]int64, error) {
-	rows, err := r.q.ListEventsByPlayerID(ctx, sql.NullInt64{Int64: playerID, Valid: true})
+	rows, err := r.q.ListEventsByPlayerID(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,20 +91,20 @@ func (r *EventRepo) ListIDsByPlayerID(ctx context.Context, playerID int64) ([]in
 
 func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int32, playerID int64) ([]int64, error) {
 	return r.q.ListFriendsAvailableEventIDs(ctx, sqlcgen.ListFriendsAvailableEventIDsParams{
-		RequesterID: sql.NullInt32{Int32: followerID, Valid: true},
-		PlayerID:    sql.NullInt64{Int64: playerID, Valid: true},
+		RequesterID: int64(followerID),
+		PlayerID:    playerID,
 	})
 }
 
 func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
 	row, err := r.q.CreateEvent(ctx, sqlcgen.CreateEventParams{
-		CourseID:      sql.NullInt32{Int32: e.CourseID, Valid: true},
+		CourseID:      int64(e.CourseID),
 		Date:          sql.NullString{String: e.Date, Valid: true},
 		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
 		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
 		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
 		Private:       sql.NullBool{Bool: e.Private, Valid: true},
-		HostID:        sql.NullInt32{Int32: e.HostID, Valid: true},
+		HostID:        int64(e.HostID),
 	})
 	if err != nil {
 		return 0, err
@@ -122,54 +122,51 @@ func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invit
 	qtx := r.q.WithTx(tx)
 
 	event, err := qtx.CreateEvent(ctx, sqlcgen.CreateEventParams{
-		CourseID:      sql.NullInt32{Int32: e.CourseID, Valid: true},
+		CourseID:      int64(e.CourseID),
 		Date:          sql.NullString{String: e.Date, Valid: true},
 		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
 		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
 		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
 		Private:       sql.NullBool{Bool: e.Private, Valid: true},
-		HostID:        sql.NullInt32{Int32: e.HostID, Valid: true},
+		HostID:        int64(e.HostID),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create event: %w", err)
 	}
 
-	// Host gets accepted status
 	_, err = qtx.CreatePlayerEvent(ctx, sqlcgen.CreatePlayerEventParams{
-		PlayerID:     sql.NullInt64{Int64: int64(e.HostID), Valid: true},
-		EventID:      sql.NullInt64{Int64: event.ID, Valid: true},
-		InviteStatus: sql.NullInt32{Int32: 1, Valid: true}, // accepted
+		PlayerID:     int64(e.HostID),
+		EventID:      event.ID,
+		InviteStatus: int32(entity.InviteStatusAccepted),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create host player_event: %w", err)
 	}
 
 	if e.Private {
-		// Private event: invite only specified invitees
 		for _, inviteeID := range invitees {
 			if inviteeID == int64(e.HostID) {
 				continue
 			}
 			_, err = qtx.CreatePlayerEvent(ctx, sqlcgen.CreatePlayerEventParams{
-				PlayerID:     sql.NullInt64{Int64: inviteeID, Valid: true},
-				EventID:      sql.NullInt64{Int64: event.ID, Valid: true},
-				InviteStatus: sql.NullInt32{Int32: 0, Valid: true}, // pending
+				PlayerID:     inviteeID,
+				EventID:      event.ID,
+				InviteStatus: int32(entity.InviteStatusPending),
 			})
 			if err != nil {
 				return 0, fmt.Errorf("failed to create invitee player_event: %w", err)
 			}
 		}
 	} else {
-		// Public event: invite all players except host
 		playerIDs, err := qtx.ListPlayersExceptHost(ctx, int64(e.HostID))
 		if err != nil {
 			return 0, fmt.Errorf("failed to list players: %w", err)
 		}
 		for _, pid := range playerIDs {
 			_, err = qtx.CreatePlayerEvent(ctx, sqlcgen.CreatePlayerEventParams{
-				PlayerID:     sql.NullInt64{Int64: pid, Valid: true},
-				EventID:      sql.NullInt64{Int64: event.ID, Valid: true},
-				InviteStatus: sql.NullInt32{Int32: 0, Valid: true}, // pending
+				PlayerID:     pid,
+				EventID:      event.ID,
+				InviteStatus: int32(entity.InviteStatusPending),
 			})
 			if err != nil {
 				return 0, fmt.Errorf("failed to create player_event: %w", err)
@@ -187,7 +184,7 @@ func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invit
 func (r *EventRepo) Update(ctx context.Context, e entity.Event) error {
 	return r.q.UpdateEvent(ctx, sqlcgen.UpdateEventParams{
 		ID:            e.ID,
-		CourseID:      sql.NullInt32{Int32: e.CourseID, Valid: true},
+		CourseID:      int64(e.CourseID),
 		Date:          sql.NullString{String: e.Date, Valid: true},
 		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
 		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},

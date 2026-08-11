@@ -17,7 +17,7 @@ func TestPlayerEventJoinSuccess(t *testing.T) {
 	playerEvents := newJoinAwarePlayerEventRepo()
 	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 
-	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 2, Private: false}
+	playerEvents.capacity[10] = 2
 	playerEvents.acceptedCount[10] = 0
 
 	pe, err := svc.JoinEvent(context.Background(), 5, 10)
@@ -27,24 +27,25 @@ func TestPlayerEventJoinSuccess(t *testing.T) {
 	assert.Equal(t, int64(1), playerEvents.acceptedCount[10])
 }
 
-func TestPlayerEventJoinRejectsFullAndDuplicate(t *testing.T) {
+func TestPlayerEventJoinRejectsFullDuplicateAndMissing(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
 	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 	ctx := context.Background()
 
-	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, OpenSpots: 1}
+	playerEvents.capacity[10] = 1
 	playerEvents.acceptedCount[10] = 1
 
 	_, err := svc.JoinEvent(ctx, 5, 10)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "full")
+	require.ErrorIs(t, err, entity.ErrEventFull)
 
 	playerEvents.acceptedCount[10] = 0
 	playerEvents.existing[playerEventKey{5, 10}] = true
 	_, err = svc.JoinEvent(ctx, 5, 10)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already part")
+	require.ErrorIs(t, err, entity.ErrAlreadyOnEvent)
+
+	_, err = svc.JoinEvent(ctx, 5, 999)
+	require.ErrorIs(t, err, entity.ErrEventMissing)
 }
 
 func TestPlayerEventUpdateStatusClosesWhenFull(t *testing.T) {
@@ -67,20 +68,47 @@ type playerEventKey struct {
 
 type joinAwarePlayerEventRepo struct {
 	*fakePlayerEventRepo
-	existing       map[playerEventKey]bool
-	acceptedCount  map[int64]int64
-	closed         map[int64]bool
-	nextID         int64
+	existing      map[playerEventKey]bool
+	capacity      map[int64]int32
+	acceptedCount map[int64]int64
+	closed        map[int64]bool
+	nextID        int64
 }
 
 func newJoinAwarePlayerEventRepo() *joinAwarePlayerEventRepo {
 	return &joinAwarePlayerEventRepo{
 		fakePlayerEventRepo: newFakePlayerEventRepo(),
 		existing:            make(map[playerEventKey]bool),
+		capacity:            make(map[int64]int32),
 		acceptedCount:       make(map[int64]int64),
 		closed:              make(map[int64]bool),
 		nextID:              1,
 	}
+}
+
+func (r *joinAwarePlayerEventRepo) JoinAccepted(_ context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
+	capacity, ok := r.capacity[eventID]
+	if !ok {
+		return nil, entity.ErrEventMissing
+	}
+	if r.existing[playerEventKey{playerID, eventID}] {
+		return nil, entity.ErrAlreadyOnEvent
+	}
+	if r.acceptedCount[eventID] >= int64(capacity) {
+		return nil, entity.ErrEventFull
+	}
+	pe, err := r.Create(context.Background(), entity.PlayerEvent{
+		PlayerID:     playerID,
+		EventID:      eventID,
+		InviteStatus: entity.InviteStatusAccepted,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if r.acceptedCount[eventID] >= int64(capacity) {
+		_ = r.ClosePendingForEvent(context.Background(), eventID)
+	}
+	return pe, nil
 }
 
 func (r *joinAwarePlayerEventRepo) Get(_ context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
