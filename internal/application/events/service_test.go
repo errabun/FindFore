@@ -96,6 +96,9 @@ func (r *fakePlayerEventRepo) ReopenClosedForEvent(context.Context, int64) error
 func (r *fakePlayerEventRepo) JoinAccepted(context.Context, int64, int64) (*entity.PlayerEvent, error) {
 	return nil, entity.ErrEventMissing
 }
+func (r *fakePlayerEventRepo) AcceptInvite(context.Context, int64, int64) (*entity.PlayerEvent, error) {
+	return nil, entity.ErrPlayerEventMissing
+}
 
 func TestEventGetPrivateVisibility(t *testing.T) {
 	eventRepo := newFakeEventRepo()

@@ -32,6 +32,10 @@ func (s *PlayerEventService) UpdateStatus(ctx context.Context, playerID, eventID
 		return nil, fmt.Errorf("invalid invite status: %s", status)
 	}
 
+	if inviteStatus == entity.InviteStatusAccepted {
+		return s.playerEvents.AcceptInvite(ctx, playerID, eventID)
+	}
+
 	pe, err := s.playerEvents.UpdateStatus(ctx, playerID, eventID, inviteStatus)
 	if err != nil {
 		return nil, fmt.Errorf("update player event status: %w", err)

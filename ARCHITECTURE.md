@@ -73,9 +73,10 @@ flowchart TB
 Today’s `events` table is **social round coordination** (host a round, invite friends, fill open spots). It is not provider tee-sheet inventory.
 
 - `events.open_spots` means **capacity** (max accepted players). Remaining spots are derived from accepted `player_events` rows.
+- Join and invite-accept enforce capacity under `SELECT … FOR UPDATE` on the event row so concurrent claims serialize. `UNIQUE (player_id, event_id)` is the duplicate-membership safety net (mapped to a domain conflict error).
 - When booking lands, introduce separate tables such as `tee_times`, `reservations`, and `course_providers(provider, external_id)` rather than overloading `events` with vendor inventory.
 - A social `event` may later *reference* a booked reservation; keep those concerns distinct.
-
+- Production migrations must not silently delete user data without an explicit, reviewed data-migration strategy.
 ---
 
 ## Social → Identity Loop

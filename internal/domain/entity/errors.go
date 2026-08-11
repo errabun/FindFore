@@ -9,4 +9,6 @@ var (
 	ErrEventFull = errors.New("event is full")
 	// ErrEventMissing is returned when locking/joining a nonexistent event.
 	ErrEventMissing = errors.New("event not found")
+	// ErrPlayerEventMissing is returned when no player_events row exists for the pair.
+	ErrPlayerEventMissing = errors.New("player event not found")
 )

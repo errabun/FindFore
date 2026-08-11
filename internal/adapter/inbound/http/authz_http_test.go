@@ -111,11 +111,15 @@ func (stubCourses) FindOrCreate(context.Context, entity.Course) (*entity.Course,
 }
 
 type stubPlayerEvents struct {
-	joinErr error
+	joinErr   error
+	updateErr error
 }
 
 func (s stubPlayerEvents) UpdateStatus(context.Context, int64, int64, string) (*entity.PlayerEvent, error) {
-	return nil, nil
+	if s.updateErr != nil {
+		return nil, s.updateErr
+	}
+	return &entity.PlayerEvent{ID: 1, PlayerID: 1, EventID: 10, InviteStatus: entity.InviteStatusAccepted}, nil
 }
 func (s stubPlayerEvents) JoinEvent(context.Context, int64, int64) (*entity.PlayerEvent, error) {
 	if s.joinErr != nil {
@@ -226,6 +230,16 @@ func TestAcceptFriendshipForbiddenMapsTo403(t *testing.T) {
 func TestJoinEventConflictMapsTo409(t *testing.T) {
 	r := testRouterWith(stubPlayerEvents{joinErr: entity.ErrEventFull}, stubFriendships{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/player-event/join", strings.NewReader(`{"event_id":10}`))
+	req.Header.Set("Authorization", bearer(1))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestAcceptInviteConflictMapsTo409(t *testing.T) {
+	r := testRouterWith(stubPlayerEvents{updateErr: entity.ErrEventFull}, stubFriendships{})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/player-event", strings.NewReader(`{"event_id":10,"invite_status":"accepted"}`))
 	req.Header.Set("Authorization", bearer(1))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

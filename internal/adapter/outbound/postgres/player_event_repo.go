@@ -42,6 +42,9 @@ func (r *PlayerEventRepo) Create(ctx context.Context, pe entity.PlayerEvent) (*e
 		InviteStatus: int32(pe.InviteStatus),
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, entity.ErrAlreadyOnEvent
+		}
 		return nil, err
 	}
 	return &entity.PlayerEvent{
@@ -133,6 +136,9 @@ func (r *PlayerEventRepo) JoinAccepted(ctx context.Context, playerID, eventID in
 		InviteStatus: int32(entity.InviteStatusAccepted),
 	})
 	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, entity.ErrAlreadyOnEvent
+		}
 		return nil, fmt.Errorf("create player event: %w", err)
 	}
 
@@ -144,6 +150,84 @@ func (r *PlayerEventRepo) JoinAccepted(ctx context.Context, playerID, eventID in
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit join tx: %w", err)
+	}
+
+	return &entity.PlayerEvent{
+		ID:           row.ID,
+		PlayerID:     row.PlayerID,
+		EventID:      row.EventID,
+		InviteStatus: entity.InviteStatus(row.InviteStatus),
+	}, nil
+}
+
+// AcceptInvite locks the event, enforces capacity, and sets an existing membership to accepted.
+// Already-accepted memberships succeed idempotently.
+func (r *PlayerEventRepo) AcceptInvite(ctx context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin accept tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := r.q.WithTx(tx)
+
+	openSpots, err := qtx.LockEventOpenSpots(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, entity.ErrEventMissing
+		}
+		return nil, fmt.Errorf("lock event %d: %w", eventID, err)
+	}
+	capacity := openSpots.Int32
+
+	existing, err := qtx.GetPlayerEvent(ctx, sqlcgen.GetPlayerEventParams{
+		PlayerID: playerID,
+		EventID:  eventID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, entity.ErrPlayerEventMissing
+		}
+		return nil, fmt.Errorf("get player event: %w", err)
+	}
+
+	if entity.InviteStatus(existing.InviteStatus) == entity.InviteStatusAccepted {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit accept tx: %w", err)
+		}
+		return &entity.PlayerEvent{
+			ID:           existing.ID,
+			PlayerID:     existing.PlayerID,
+			EventID:      existing.EventID,
+			InviteStatus: entity.InviteStatusAccepted,
+		}, nil
+	}
+
+	acceptedCount, err := qtx.CountAcceptedForEvent(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("count accepted: %w", err)
+	}
+	if acceptedCount >= int64(capacity) {
+		return nil, entity.ErrEventFull
+	}
+
+	row, err := qtx.UpdatePlayerEventStatus(ctx, sqlcgen.UpdatePlayerEventStatusParams{
+		PlayerID:     playerID,
+		EventID:      eventID,
+		InviteStatus: int32(entity.InviteStatusAccepted),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("accept player event: %w", err)
+	}
+
+	if acceptedCount+1 >= int64(capacity) {
+		if err := qtx.ClosePendingForEvent(ctx, eventID); err != nil {
+			return nil, fmt.Errorf("close pending: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit accept tx: %w", err)
 	}
 
 	return &entity.PlayerEvent{

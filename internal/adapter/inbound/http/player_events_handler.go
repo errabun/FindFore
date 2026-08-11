@@ -38,7 +38,19 @@ func (h *Handler) UpdatePlayerEvent(w http.ResponseWriter, r *http.Request) {
 
 	pe, err := h.playerEvents.UpdateStatus(r.Context(), actorID, req.EventID, req.InviteStatus)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "Player event not found")
+		if errors.Is(err, entity.ErrEventFull) {
+			respondError(w, http.StatusConflict, "conflict", "Event is full")
+			return
+		}
+		if errors.Is(err, entity.ErrAlreadyOnEvent) {
+			respondError(w, http.StatusConflict, "conflict", "Player is already part of this event")
+			return
+		}
+		if errors.Is(err, entity.ErrPlayerEventMissing) || errors.Is(err, entity.ErrEventMissing) {
+			respondError(w, http.StatusNotFound, "not_found", "Player event not found")
+			return
+		}
+		respondInternalError(w, r, err, "Failed to update player event")
 		return
 	}
 

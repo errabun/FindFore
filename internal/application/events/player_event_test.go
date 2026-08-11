@@ -40,7 +40,7 @@ func TestPlayerEventJoinRejectsFullDuplicateAndMissing(t *testing.T) {
 	require.ErrorIs(t, err, entity.ErrEventFull)
 
 	playerEvents.acceptedCount[10] = 0
-	playerEvents.existing[playerEventKey{5, 10}] = true
+	playerEvents.existing[playerEventKey{5, 10}] = entity.InviteStatusPending
 	_, err = svc.JoinEvent(ctx, 5, 10)
 	require.ErrorIs(t, err, entity.ErrAlreadyOnEvent)
 
@@ -48,18 +48,56 @@ func TestPlayerEventJoinRejectsFullDuplicateAndMissing(t *testing.T) {
 	require.ErrorIs(t, err, entity.ErrEventMissing)
 }
 
-func TestPlayerEventUpdateStatusClosesWhenFull(t *testing.T) {
+func TestPlayerEventAcceptInviteClosesWhenFull(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
 	svc := events.NewPlayerEventService(playerEvents, eventRepo)
 
-	eventRepo.byID[3] = &entity.Event{ID: 3, HostID: 1, OpenSpots: 1}
+	playerEvents.capacity[3] = 1
 	playerEvents.acceptedCount[3] = 0
-	playerEvents.existing[playerEventKey{2, 3}] = true
+	playerEvents.existing[playerEventKey{2, 3}] = entity.InviteStatusPending
 
 	_, err := svc.UpdateStatus(context.Background(), 2, 3, "accepted")
 	require.NoError(t, err)
+	assert.Equal(t, int64(1), playerEvents.acceptedCount[3])
 	assert.True(t, playerEvents.closed[3], "pending invites should close when full")
+}
+
+func TestPlayerEventAcceptInviteRejectsWhenFull(t *testing.T) {
+	eventRepo := newFakeEventRepo()
+	playerEvents := newJoinAwarePlayerEventRepo()
+	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+
+	playerEvents.capacity[3] = 1
+	playerEvents.acceptedCount[3] = 1
+	playerEvents.existing[playerEventKey{2, 3}] = entity.InviteStatusPending
+
+	_, err := svc.UpdateStatus(context.Background(), 2, 3, "accepted")
+	require.ErrorIs(t, err, entity.ErrEventFull)
+}
+
+func TestPlayerEventAcceptInviteIdempotentWhenAlreadyAccepted(t *testing.T) {
+	eventRepo := newFakeEventRepo()
+	playerEvents := newJoinAwarePlayerEventRepo()
+	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+
+	playerEvents.capacity[3] = 2
+	playerEvents.acceptedCount[3] = 1
+	playerEvents.existing[playerEventKey{2, 3}] = entity.InviteStatusAccepted
+
+	pe, err := svc.UpdateStatus(context.Background(), 2, 3, "accepted")
+	require.NoError(t, err)
+	assert.Equal(t, entity.InviteStatusAccepted, pe.InviteStatus)
+	assert.Equal(t, int64(1), playerEvents.acceptedCount[3], "should not double-count")
+}
+
+func TestPlayerEventAcceptInviteMissing(t *testing.T) {
+	playerEvents := newJoinAwarePlayerEventRepo()
+	svc := events.NewPlayerEventService(playerEvents, newFakeEventRepo())
+	playerEvents.capacity[3] = 4
+
+	_, err := svc.UpdateStatus(context.Background(), 2, 3, "accepted")
+	require.ErrorIs(t, err, entity.ErrPlayerEventMissing)
 }
 
 type playerEventKey struct {
@@ -68,7 +106,7 @@ type playerEventKey struct {
 
 type joinAwarePlayerEventRepo struct {
 	*fakePlayerEventRepo
-	existing      map[playerEventKey]bool
+	existing      map[playerEventKey]entity.InviteStatus
 	capacity      map[int64]int32
 	acceptedCount map[int64]int64
 	closed        map[int64]bool
@@ -78,7 +116,7 @@ type joinAwarePlayerEventRepo struct {
 func newJoinAwarePlayerEventRepo() *joinAwarePlayerEventRepo {
 	return &joinAwarePlayerEventRepo{
 		fakePlayerEventRepo: newFakePlayerEventRepo(),
-		existing:            make(map[playerEventKey]bool),
+		existing:            make(map[playerEventKey]entity.InviteStatus),
 		capacity:            make(map[int64]int32),
 		acceptedCount:       make(map[int64]int64),
 		closed:              make(map[int64]bool),
@@ -91,7 +129,7 @@ func (r *joinAwarePlayerEventRepo) JoinAccepted(_ context.Context, playerID, eve
 	if !ok {
 		return nil, entity.ErrEventMissing
 	}
-	if r.existing[playerEventKey{playerID, eventID}] {
+	if _, exists := r.existing[playerEventKey{playerID, eventID}]; exists {
 		return nil, entity.ErrAlreadyOnEvent
 	}
 	if r.acceptedCount[eventID] >= int64(capacity) {
@@ -111,17 +149,51 @@ func (r *joinAwarePlayerEventRepo) JoinAccepted(_ context.Context, playerID, eve
 	return pe, nil
 }
 
-func (r *joinAwarePlayerEventRepo) Get(_ context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
-	if r.existing[playerEventKey{playerID, eventID}] {
-		return &entity.PlayerEvent{PlayerID: playerID, EventID: eventID}, nil
+func (r *joinAwarePlayerEventRepo) AcceptInvite(_ context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
+	capacity, ok := r.capacity[eventID]
+	if !ok {
+		return nil, entity.ErrEventMissing
 	}
-	return nil, sql.ErrNoRows
+	status, exists := r.existing[playerEventKey{playerID, eventID}]
+	if !exists {
+		return nil, entity.ErrPlayerEventMissing
+	}
+	if status == entity.InviteStatusAccepted {
+		return &entity.PlayerEvent{
+			ID:           1,
+			PlayerID:     playerID,
+			EventID:      eventID,
+			InviteStatus: entity.InviteStatusAccepted,
+		}, nil
+	}
+	if r.acceptedCount[eventID] >= int64(capacity) {
+		return nil, entity.ErrEventFull
+	}
+	r.existing[playerEventKey{playerID, eventID}] = entity.InviteStatusAccepted
+	r.acceptedCount[eventID]++
+	if r.acceptedCount[eventID] >= int64(capacity) {
+		_ = r.ClosePendingForEvent(context.Background(), eventID)
+	}
+	return &entity.PlayerEvent{
+		ID:           1,
+		PlayerID:     playerID,
+		EventID:      eventID,
+		InviteStatus: entity.InviteStatusAccepted,
+	}, nil
+}
+
+func (r *joinAwarePlayerEventRepo) Get(_ context.Context, playerID, eventID int64) (*entity.PlayerEvent, error) {
+	status, ok := r.existing[playerEventKey{playerID, eventID}]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	return &entity.PlayerEvent{PlayerID: playerID, EventID: eventID, InviteStatus: status}, nil
 }
 
 func (r *joinAwarePlayerEventRepo) Create(_ context.Context, pe entity.PlayerEvent) (*entity.PlayerEvent, error) {
 	pe.ID = r.nextID
 	r.nextID++
-	r.existing[playerEventKey{pe.PlayerID, pe.EventID}] = true
+	r.existing[playerEventKey{pe.PlayerID, pe.EventID}] = pe.InviteStatus
 	if pe.InviteStatus == entity.InviteStatusAccepted {
 		r.acceptedCount[pe.EventID]++
 	}
@@ -133,6 +205,7 @@ func (r *joinAwarePlayerEventRepo) UpdateStatus(_ context.Context, playerID, eve
 	if status == entity.InviteStatusAccepted {
 		r.acceptedCount[eventID]++
 	}
+	r.existing[playerEventKey{playerID, eventID}] = status
 	return &entity.PlayerEvent{
 		ID:           1,
 		PlayerID:     playerID,

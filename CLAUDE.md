@@ -118,6 +118,7 @@ Organized by the four pillars defined in `VISION.md`:
 - **Runtime:** Cloud Run service built from repo `Dockerfile` (multi-stage: frontend build → Go binary → distroless).
 - **Database:** Cloud SQL PostgreSQL via Unix socket (`INSTANCE_CONNECTION_NAME`, `DB_USER`, `DB_PASS`, `DB_NAME`) or `DATABASE_URL` for local dev.
 - **Migrations are immutable.** Never edit an old migration — always create a new one. Every migration should be reversible when practical (`migrations/*.up.sql` + matching `*.down.sql`). Local: `go run ./cmd/migrate -direction up`. Cloud SQL: `./scripts/gcp-migrate.sh`.
+- **Production migrations must not silently delete user data** unless the migration has an explicit, reviewed data-migration strategy. Pre-launch cleanup of orphan/duplicate rows (e.g. `000006`) is fine before real users; after launch, destructive cleanup requires deliberate backfill/approval.
 - **Deploy:** `cloudbuild.yaml` builds image, pushes to Artifact Registry, deploys to Cloud Run. Connect repo in Cloud Console or use `gcloud builds submit`.
 - **Secrets:** JWT, DB password, API keys in Secret Manager — never in the image or repo.
 - **Storage (future):** Cloud Storage for user uploads (profile photos, feed images).
