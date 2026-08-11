@@ -103,10 +103,10 @@ func (stubSessions) Login(context.Context, string, string) (*entity.PlayerWithDe
 type stubCourses struct{}
 
 func (stubCourses) List(context.Context) ([]entity.Course, error) { return nil, nil }
-func (stubCourses) Search(context.Context, string) ([]entity.Course, error) {
+func (stubCourses) Search(context.Context, string) ([]entity.CourseSearchResult, error) {
 	return nil, nil
 }
-func (stubCourses) FindOrCreate(context.Context, entity.Course) (*entity.Course, bool, error) {
+func (stubCourses) FindOrCreate(context.Context, entity.Course, *entity.CourseProvider) (*entity.Course, bool, error) {
 	return nil, false, nil
 }
 

@@ -21,10 +21,15 @@ type PlayerRepository interface {
 
 type CourseRepository interface {
 	List(ctx context.Context) ([]entity.Course, error)
+	GetByID(ctx context.Context, id int64) (*entity.Course, error)
 	GetByNameAndCity(ctx context.Context, name, city string) (*entity.Course, error)
 	GetByProviderExternalID(ctx context.Context, provider, externalID string) (*entity.Course, error)
 	Create(ctx context.Context, c entity.Course) (*entity.Course, error)
-	UpsertProvider(ctx context.Context, courseID int64, provider, externalID string) error
+	GetProvider(ctx context.Context, provider, externalID string) (*entity.CourseProvider, error)
+	// LinkProvider associates (provider, external_id) with courseID.
+	// Idempotent when the link already points at the same course; returns
+	// entity.ErrProviderCourseConflict when it points at a different course.
+	LinkProvider(ctx context.Context, courseID int64, provider, externalID string) error
 }
 
 type EventRepository interface {

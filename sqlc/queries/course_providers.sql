@@ -5,10 +5,12 @@ FROM course_providers cp
 JOIN courses c ON c.id = cp.course_id
 WHERE cp.provider = $1 AND cp.external_id = $2;
 
--- name: UpsertCourseProvider :one
+-- name: GetCourseProvider :one
+SELECT id, course_id, provider, external_id
+FROM course_providers
+WHERE provider = $1 AND external_id = $2;
+
+-- name: InsertCourseProvider :one
 INSERT INTO course_providers (course_id, provider, external_id, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())
-ON CONFLICT (provider, external_id) DO UPDATE
-SET course_id = EXCLUDED.course_id,
-    updated_at = NOW()
 RETURNING id, course_id, provider, external_id;

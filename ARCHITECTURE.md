@@ -74,7 +74,9 @@ Today’s `events` table is **social round coordination** (host a round, invite 
 
 - `events.open_spots` means **capacity** (max accepted players). Remaining spots are derived from accepted `player_events` rows.
 - Join and invite-accept enforce capacity under `SELECT … FOR UPDATE` on the event row so concurrent claims serialize. `UNIQUE (player_id, event_id)` is the duplicate-membership safety net (mapped to a domain conflict error).
-- **`courses`** is the canonical FindFore golf course (address, optional geo/timezone). **`course_providers(provider, external_id)`** maps vendor identities (e.g. `golfcourseapi`) onto that course — one course, many providers; `UNIQUE(provider, external_id)`.
+- **`courses`** is the canonical FindFore golf course (address, optional geo/timezone). Provider/external IDs are **not** attributes of `Course`.
+- **`course_providers`** is the relationship: `(provider, external_id) → course_id` with `UNIQUE(provider, external_id)`. Links are **immutable**: same provider id + same course is idempotent; same provider id + different course is a conflict (no silent reassignment).
+- Search may return a temporary provider ref for find-or-create; `GET /courses` returns canonical course fields only.
 - When booking lands, introduce separate tables such as `tee_times` and `reservations` rather than overloading `events` with vendor inventory.
 - A social `event` may later *reference* a booked reservation; keep those concerns distinct.
 - Production migrations must not silently delete user data without an explicit, reviewed data-migration strategy.

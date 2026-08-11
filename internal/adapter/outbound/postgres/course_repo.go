@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
@@ -67,6 +68,18 @@ func (r *CourseRepo) List(ctx context.Context) ([]entity.Course, error) {
 	return courses, nil
 }
 
+func (r *CourseRepo) GetByID(ctx context.Context, id int64) (*entity.Course, error) {
+	row, err := r.q.GetCourseByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	c := mapCourseRow(
+		row.ID, row.Name, row.Street, row.City, row.State, row.ZipCode, row.Phone, row.Cost,
+		row.Country, row.Timezone, row.Latitude, row.Longitude,
+	)
+	return &c, nil
+}
+
 func (r *CourseRepo) GetByNameAndCity(ctx context.Context, name, city string) (*entity.Course, error) {
 	row, err := r.q.GetCourseByNameAndCity(ctx, sqlcgen.GetCourseByNameAndCityParams{
 		Name: sql.NullString{String: name, Valid: true},
@@ -125,11 +138,53 @@ func (r *CourseRepo) Create(ctx context.Context, c entity.Course) (*entity.Cours
 	return &out, nil
 }
 
-func (r *CourseRepo) UpsertProvider(ctx context.Context, courseID int64, provider, externalID string) error {
-	_, err := r.q.UpsertCourseProvider(ctx, sqlcgen.UpsertCourseProviderParams{
+func (r *CourseRepo) GetProvider(ctx context.Context, provider, externalID string) (*entity.CourseProvider, error) {
+	row, err := r.q.GetCourseProvider(ctx, sqlcgen.GetCourseProviderParams{
+		Provider:   provider,
+		ExternalID: externalID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &entity.CourseProvider{
+		ID:         row.ID,
+		CourseID:   row.CourseID,
+		Provider:   row.Provider,
+		ExternalID: row.ExternalID,
+	}, nil
+}
+
+func (r *CourseRepo) LinkProvider(ctx context.Context, courseID int64, provider, externalID string) error {
+	existing, err := r.GetProvider(ctx, provider, externalID)
+	if err == nil {
+		if existing.CourseID == courseID {
+			return nil
+		}
+		return entity.ErrProviderCourseConflict
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	_, err = r.q.InsertCourseProvider(ctx, sqlcgen.InsertCourseProviderParams{
 		CourseID:   courseID,
 		Provider:   provider,
 		ExternalID: externalID,
 	})
-	return err
+	if err != nil {
+		if isUniqueViolation(err) {
+			// Concurrent insert — re-check ownership.
+			again, getErr := r.GetProvider(ctx, provider, externalID)
+			if getErr != nil {
+				return getErr
+			}
+			if again.CourseID == courseID {
+				return nil
+			}
+			return entity.ErrProviderCourseConflict
+		}
+		return err
+	}
+	return nil
 }
+

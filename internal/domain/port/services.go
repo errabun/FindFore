@@ -20,8 +20,8 @@ type SessionService interface {
 
 type CourseService interface {
 	List(ctx context.Context) ([]entity.Course, error)
-	Search(ctx context.Context, query string) ([]entity.Course, error)
-	FindOrCreate(ctx context.Context, c entity.Course) (*entity.Course, bool, error)
+	Search(ctx context.Context, query string) ([]entity.CourseSearchResult, error)
+	FindOrCreate(ctx context.Context, c entity.Course, link *entity.CourseProvider) (*entity.Course, bool, error)
 }
 
 type EventService interface {
@@ -58,5 +58,5 @@ type PostService interface {
 }
 
 type GolfCourseSearcher interface {
-	Search(ctx context.Context, query string) ([]entity.Course, error)
+	Search(ctx context.Context, query string) ([]entity.CourseSearchResult, error)
 }

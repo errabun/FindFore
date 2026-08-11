@@ -50,10 +50,10 @@ func NewClient(apiKey string) *Client {
 
 // Search queries the Golf Course API and returns matching courses.
 // It returns an empty slice when query is blank.
-func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, error) {
+func (c *Client) Search(ctx context.Context, query string) ([]entity.CourseSearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return []entity.Course{}, nil
+		return []entity.CourseSearchResult{}, nil
 	}
 
 	apiURL := fmt.Sprintf("https://api.golfcourseapi.com/v1/search?search_query=%s&limit=10",
@@ -99,7 +99,7 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 		return nil, fmt.Errorf("golfcourseapi: parse response: %w", err)
 	}
 
-	results := make([]entity.Course, 0, len(apiResp.Courses))
+	results := make([]entity.CourseSearchResult, 0, len(apiResp.Courses))
 	for _, cr := range apiResp.Courses {
 		name := cr.CourseName
 		if name == "" {
@@ -116,14 +116,16 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 			country = "US"
 		}
 
-		results = append(results, entity.Course{
-			Name:       name,
-			Street:     street,
-			City:       cr.Location.City,
-			State:      cr.Location.State,
-			Country:    country,
-			Latitude:   cr.Location.Latitude,
-			Longitude:  cr.Location.Longitude,
+		results = append(results, entity.CourseSearchResult{
+			Course: entity.Course{
+				Name:      name,
+				Street:    street,
+				City:      cr.Location.City,
+				State:     cr.Location.State,
+				Country:   country,
+				Latitude:  cr.Location.Latitude,
+				Longitude: cr.Location.Longitude,
+			},
 			Provider:   entity.ProviderGolfCourseAPI,
 			ExternalID: parseExternalID(cr.ID),
 		})

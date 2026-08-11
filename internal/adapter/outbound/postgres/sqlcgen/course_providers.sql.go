@@ -58,31 +58,58 @@ func (q *Queries) GetCourseByProviderExternalID(ctx context.Context, arg GetCour
 	return i, err
 }
 
-const upsertCourseProvider = `-- name: UpsertCourseProvider :one
-INSERT INTO course_providers (course_id, provider, external_id, created_at, updated_at)
-VALUES ($1, $2, $3, NOW(), NOW())
-ON CONFLICT (provider, external_id) DO UPDATE
-SET course_id = EXCLUDED.course_id,
-    updated_at = NOW()
-RETURNING id, course_id, provider, external_id
+const getCourseProvider = `-- name: GetCourseProvider :one
+SELECT id, course_id, provider, external_id
+FROM course_providers
+WHERE provider = $1 AND external_id = $2
 `
 
-type UpsertCourseProviderParams struct {
-	CourseID   int64
+type GetCourseProviderParams struct {
 	Provider   string
 	ExternalID string
 }
 
-type UpsertCourseProviderRow struct {
+type GetCourseProviderRow struct {
 	ID         int64
 	CourseID   int64
 	Provider   string
 	ExternalID string
 }
 
-func (q *Queries) UpsertCourseProvider(ctx context.Context, arg UpsertCourseProviderParams) (UpsertCourseProviderRow, error) {
-	row := q.db.QueryRowContext(ctx, upsertCourseProvider, arg.CourseID, arg.Provider, arg.ExternalID)
-	var i UpsertCourseProviderRow
+func (q *Queries) GetCourseProvider(ctx context.Context, arg GetCourseProviderParams) (GetCourseProviderRow, error) {
+	row := q.db.QueryRowContext(ctx, getCourseProvider, arg.Provider, arg.ExternalID)
+	var i GetCourseProviderRow
+	err := row.Scan(
+		&i.ID,
+		&i.CourseID,
+		&i.Provider,
+		&i.ExternalID,
+	)
+	return i, err
+}
+
+const insertCourseProvider = `-- name: InsertCourseProvider :one
+INSERT INTO course_providers (course_id, provider, external_id, created_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+RETURNING id, course_id, provider, external_id
+`
+
+type InsertCourseProviderParams struct {
+	CourseID   int64
+	Provider   string
+	ExternalID string
+}
+
+type InsertCourseProviderRow struct {
+	ID         int64
+	CourseID   int64
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) InsertCourseProvider(ctx context.Context, arg InsertCourseProviderParams) (InsertCourseProviderRow, error) {
+	row := q.db.QueryRowContext(ctx, insertCourseProvider, arg.CourseID, arg.Provider, arg.ExternalID)
+	var i InsertCourseProviderRow
 	err := row.Scan(
 		&i.ID,
 		&i.CourseID,

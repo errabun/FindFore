@@ -9,10 +9,11 @@ import (
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
-// FindOrCreate returns the course and whether it was newly created.
-func (s *Service) FindOrCreate(ctx context.Context, c entity.Course) (*entity.Course, bool, error) {
-	if c.Provider != "" && c.ExternalID != "" {
-		existing, err := s.courses.GetByProviderExternalID(ctx, c.Provider, c.ExternalID)
+// FindOrCreate resolves a canonical course, optionally linking a provider identity.
+// link may be nil when the client has no provider external id.
+func (s *Service) FindOrCreate(ctx context.Context, c entity.Course, link *entity.CourseProvider) (*entity.Course, bool, error) {
+	if link != nil && link.Provider != "" && link.ExternalID != "" {
+		existing, err := s.courses.GetByProviderExternalID(ctx, link.Provider, link.ExternalID)
 		if err == nil {
 			return existing, false, nil
 		}
@@ -23,7 +24,7 @@ func (s *Service) FindOrCreate(ctx context.Context, c entity.Course) (*entity.Co
 
 	existing, err := s.courses.GetByNameAndCity(ctx, c.Name, c.City)
 	if err == nil {
-		if err := s.linkProvider(ctx, existing.ID, c); err != nil {
+		if err := s.linkProvider(ctx, existing.ID, link); err != nil {
 			return nil, false, err
 		}
 		return existing, false, nil
@@ -36,18 +37,18 @@ func (s *Service) FindOrCreate(ctx context.Context, c entity.Course) (*entity.Co
 	if err != nil {
 		return nil, false, fmt.Errorf("create course: %w", err)
 	}
-	if err := s.linkProvider(ctx, created.ID, c); err != nil {
+	if err := s.linkProvider(ctx, created.ID, link); err != nil {
 		return nil, false, err
 	}
 	return created, true, nil
 }
 
-func (s *Service) linkProvider(ctx context.Context, courseID int64, c entity.Course) error {
-	if c.Provider == "" || c.ExternalID == "" {
+func (s *Service) linkProvider(ctx context.Context, courseID int64, link *entity.CourseProvider) error {
+	if link == nil || link.Provider == "" || link.ExternalID == "" {
 		return nil
 	}
-	if err := s.courses.UpsertProvider(ctx, courseID, c.Provider, c.ExternalID); err != nil {
-		return fmt.Errorf("upsert course provider: %w", err)
+	if err := s.courses.LinkProvider(ctx, courseID, link.Provider, link.ExternalID); err != nil {
+		return fmt.Errorf("link course provider: %w", err)
 	}
 	return nil
 }
