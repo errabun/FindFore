@@ -2,6 +2,9 @@ package entity
 
 import "errors"
 
+// DefaultCourseTimezone is used when a course has no IANA timezone set.
+const DefaultCourseTimezone = "America/Denver"
+
 // CourseProvider tokens are app-owned lowercase strings (not PG ENUMs).
 const (
 	ProviderGolfCourseAPI = "golfcourseapi"

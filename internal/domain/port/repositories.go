@@ -43,7 +43,7 @@ type EventRepository interface {
 	CreateWithInvites(ctx context.Context, e entity.Event, invitees []int64) (int64, error)
 	Update(ctx context.Context, e entity.Event) error
 	Delete(ctx context.Context, id int64) error
-	DeletePast(ctx context.Context, today string) error
+	DeletePast(ctx context.Context) error
 }
 
 type PlayerEventRepository interface {

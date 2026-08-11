@@ -53,7 +53,7 @@ func main() {
 	playerSvc := players.NewService(playerRepo, friendshipRepo)
 	sessionSvc := sessions.NewService(playerRepo, friendshipRepo, cfg.JWTSecret)
 	courseSvc := courses.NewService(courseRepo, golfCourseClient)
-	eventSvc := events.NewService(eventRepo, playerEventRepo)
+	eventSvc := events.NewService(eventRepo, playerEventRepo, courseRepo)
 	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo)
 	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
 	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo)

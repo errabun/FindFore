@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
 type fakeEventRepo struct {
-	byID map[int64]*entity.Event
+	byID    map[int64]*entity.Event
 	details map[int64]*entity.EventWithDetails
 }
 
@@ -61,11 +62,30 @@ func (r *fakeEventRepo) CreateWithInvites(context.Context, entity.Event, []int64
 	return 0, nil
 }
 func (r *fakeEventRepo) Update(context.Context, entity.Event) error { return nil }
-func (r *fakeEventRepo) Delete(context.Context, int64) error         { return nil }
-func (r *fakeEventRepo) DeletePast(context.Context, string) error     { return nil }
+func (r *fakeEventRepo) Delete(context.Context, int64) error        { return nil }
+func (r *fakeEventRepo) DeletePast(context.Context) error           { return nil }
+
+type fakeCourseRepo struct{}
+
+func (fakeCourseRepo) List(context.Context) ([]entity.Course, error) { return nil, nil }
+func (fakeCourseRepo) GetByID(_ context.Context, id int64) (*entity.Course, error) {
+	return &entity.Course{ID: id, Timezone: entity.DefaultCourseTimezone}, nil
+}
+func (fakeCourseRepo) GetByNameAndCity(context.Context, string, string) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakeCourseRepo) GetByProviderExternalID(context.Context, string, string) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakeCourseRepo) Create(context.Context, entity.Course) (*entity.Course, error) {
+	return nil, nil
+}
+func (fakeCourseRepo) GetProvider(context.Context, string, string) (*entity.CourseProvider, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakeCourseRepo) LinkProvider(context.Context, int64, string, string) error { return nil }
 
 type fakePlayerEventRepo struct {
-	// eventID -> status -> player IDs
 	byStatus map[int64]map[entity.InviteStatus][]int64
 }
 
@@ -91,8 +111,10 @@ func (r *fakePlayerEventRepo) ListPlayerIDsByEventAndStatus(_ context.Context, e
 func (r *fakePlayerEventRepo) CountAcceptedForEvent(context.Context, int64) (int64, error) {
 	return 0, nil
 }
-func (r *fakePlayerEventRepo) ClosePendingForEvent(context.Context, int64) error  { return nil }
-func (r *fakePlayerEventRepo) ReopenClosedForEvent(context.Context, int64) error { return nil }
+func (r *fakePlayerEventRepo) ClosePendingForEvent(context.Context, int64) error { return nil }
+func (r *fakePlayerEventRepo) ReopenClosedForEvent(context.Context, int64) error {
+	return nil
+}
 func (r *fakePlayerEventRepo) JoinAccepted(context.Context, int64, int64) (*entity.PlayerEvent, error) {
 	return nil, entity.ErrEventMissing
 }
@@ -100,14 +122,20 @@ func (r *fakePlayerEventRepo) AcceptInvite(context.Context, int64, int64) (*enti
 	return nil, entity.ErrPlayerEventMissing
 }
 
+func futureStarts() time.Time {
+	loc, _ := time.LoadLocation(entity.DefaultCourseTimezone)
+	return time.Date(2099, 1, 1, 8, 0, 0, 0, loc)
+}
+
 func TestEventGetPrivateVisibility(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newFakePlayerEventRepo()
-	svc := events.NewService(eventRepo, playerEvents)
+	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{})
 
-	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4}
+	starts := futureStarts()
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4, StartsAt: starts}
 	eventRepo.details[10] = &entity.EventWithDetails{
-		ID: 10, HostID: 1, Private: true, OpenSpots: 4,
+		ID: 10, HostID: 1, Private: true, OpenSpots: 4, StartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
 	}
 	playerEvents.byStatus[10] = map[entity.InviteStatus][]int64{
 		entity.InviteStatusPending: {2},
@@ -129,11 +157,12 @@ func TestEventGetPrivateVisibility(t *testing.T) {
 func TestEventUpdateDeleteHostOnly(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newFakePlayerEventRepo()
-	svc := events.NewService(eventRepo, playerEvents)
+	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{})
 
-	eventRepo.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1}
+	starts := futureStarts()
+	eventRepo.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1, StartsAt: starts}
 	eventRepo.details[5] = &entity.EventWithDetails{
-		ID: 5, HostID: 1, Private: false, OpenSpots: 4,
+		ID: 5, HostID: 1, Private: false, OpenSpots: 4, StartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
 	}
 
 	ctx := context.Background()
@@ -150,7 +179,7 @@ func TestEventUpdateDeleteHostOnly(t *testing.T) {
 }
 
 func TestEventListCannotReadAnotherPlayersEvents(t *testing.T) {
-	svc := events.NewService(newFakeEventRepo(), newFakePlayerEventRepo())
+	svc := events.NewService(newFakeEventRepo(), newFakePlayerEventRepo(), fakeCourseRepo{})
 	other := int64(99)
 	_, err := svc.List(context.Background(), 1, &other, false)
 	if !errors.Is(err, events.ErrEventForbidden) {

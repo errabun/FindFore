@@ -18,6 +18,21 @@ func NewEventRepo(q *sqlcgen.Queries, db *sql.DB) *EventRepo {
 	return &EventRepo{q: q, db: db}
 }
 
+func nullTeeTimeID(id *int64) sql.NullInt64 {
+	if id == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *id, Valid: true}
+}
+
+func teeTimeIDPtr(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Int64
+	return &v
+}
+
 func (r *EventRepo) GetByID(ctx context.Context, id int64) (*entity.Event, error) {
 	row, err := r.q.GetEventByID(ctx, id)
 	if err != nil {
@@ -26,8 +41,8 @@ func (r *EventRepo) GetByID(ctx context.Context, id int64) (*entity.Event, error
 	return &entity.Event{
 		ID:            row.ID,
 		CourseID:      int32(row.CourseID),
-		Date:          row.Date.String,
-		TeeTime:       row.TeeTime.String,
+		StartsAt:      row.StartsAt,
+		TeeTimeID:     teeTimeIDPtr(row.TeeTimeID),
 		OpenSpots:     row.OpenSpots.Int32,
 		NumberOfHoles: row.NumberOfHoles.String,
 		Private:       row.Private.Bool,
@@ -41,15 +56,16 @@ func (r *EventRepo) GetDetailsByID(ctx context.Context, id int64) (*entity.Event
 		return nil, err
 	}
 	return &entity.EventWithDetails{
-		ID:            row.ID,
-		CourseName:    row.CourseName.String,
-		Date:          row.Date.String,
-		TeeTime:       row.TeeTime.String,
-		OpenSpots:     row.OpenSpots.Int32,
-		NumberOfHoles: row.NumberOfHoles.String,
-		Private:       row.Private.Bool,
-		HostName:      row.HostName.String,
-		HostID:        int32(row.HostID),
+		ID:             row.ID,
+		CourseName:     row.CourseName.String,
+		CourseTimezone: row.CourseTimezone.String,
+		StartsAt:       row.StartsAt,
+		TeeTimeID:      teeTimeIDPtr(row.TeeTimeID),
+		OpenSpots:      row.OpenSpots.Int32,
+		NumberOfHoles:  row.NumberOfHoles.String,
+		Private:        row.Private.Bool,
+		HostName:       row.HostName.String,
+		HostID:         int32(row.HostID),
 	}, nil
 }
 
@@ -96,16 +112,23 @@ func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int3
 	})
 }
 
-func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
-	row, err := r.q.CreateEvent(ctx, sqlcgen.CreateEventParams{
+func createEventParams(e entity.Event) sqlcgen.CreateEventParams {
+	return sqlcgen.CreateEventParams{
 		CourseID:      int64(e.CourseID),
-		Date:          sql.NullString{String: e.Date, Valid: true},
-		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
 		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
 		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
 		Private:       sql.NullBool{Bool: e.Private, Valid: true},
 		HostID:        int64(e.HostID),
-	})
+		StartsAt:      e.StartsAt,
+		TeeTimeID:     nullTeeTimeID(e.TeeTimeID),
+	}
+}
+
+func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
+	if e.StartsAt.IsZero() {
+		return 0, fmt.Errorf("starts_at is required")
+	}
+	row, err := r.q.CreateEvent(ctx, createEventParams(e))
 	if err != nil {
 		return 0, err
 	}
@@ -113,6 +136,9 @@ func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
 }
 
 func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invitees []int64) (int64, error) {
+	if e.StartsAt.IsZero() {
+		return 0, fmt.Errorf("starts_at is required")
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to begin transaction: %w", err)
@@ -121,15 +147,7 @@ func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invit
 
 	qtx := r.q.WithTx(tx)
 
-	event, err := qtx.CreateEvent(ctx, sqlcgen.CreateEventParams{
-		CourseID:      int64(e.CourseID),
-		Date:          sql.NullString{String: e.Date, Valid: true},
-		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
-		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
-		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
-		Private:       sql.NullBool{Bool: e.Private, Valid: true},
-		HostID:        int64(e.HostID),
-	})
+	event, err := qtx.CreateEvent(ctx, createEventParams(e))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create event: %w", err)
 	}
@@ -182,14 +200,17 @@ func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invit
 }
 
 func (r *EventRepo) Update(ctx context.Context, e entity.Event) error {
+	if e.StartsAt.IsZero() {
+		return fmt.Errorf("starts_at is required")
+	}
 	return r.q.UpdateEvent(ctx, sqlcgen.UpdateEventParams{
 		ID:            e.ID,
 		CourseID:      int64(e.CourseID),
-		Date:          sql.NullString{String: e.Date, Valid: true},
-		TeeTime:       sql.NullString{String: e.TeeTime, Valid: true},
 		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
 		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
 		Private:       sql.NullBool{Bool: e.Private, Valid: true},
+		StartsAt:      e.StartsAt,
+		TeeTimeID:     nullTeeTimeID(e.TeeTimeID),
 	})
 }
 
@@ -197,6 +218,6 @@ func (r *EventRepo) Delete(ctx context.Context, id int64) error {
 	return r.q.DeleteEvent(ctx, id)
 }
 
-func (r *EventRepo) DeletePast(ctx context.Context, today string) error {
-	return r.q.DeletePastEvents(ctx, sql.NullString{String: today, Valid: true})
+func (r *EventRepo) DeletePast(ctx context.Context) error {
+	return r.q.DeletePastEvents(ctx)
 }

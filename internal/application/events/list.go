@@ -3,7 +3,6 @@ package events
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -12,8 +11,7 @@ import (
 // When forPlayerID is set it must equal actorID (own invite/commitment list).
 // Otherwise only public events are returned (never a dump of all private rounds).
 func (s *Service) List(ctx context.Context, actorID int64, forPlayerID *int64, publicOnly bool) ([]entity.EventWithDetails, error) {
-	today := time.Now().Format("2006-01-02")
-	_ = s.events.DeletePast(ctx, today)
+	_ = s.events.DeletePast(ctx)
 
 	var eventIDs []int64
 	var err error
@@ -43,8 +41,7 @@ func (s *Service) List(ctx context.Context, actorID int64, forPlayerID *int64, p
 }
 
 func (s *Service) ListFriendsEvents(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error) {
-	today := time.Now().Format("2006-01-02")
-	_ = s.events.DeletePast(ctx, today)
+	_ = s.events.DeletePast(ctx)
 
 	eventIDs, err := s.events.ListFriendsAvailableIDs(ctx, int32(actorID), actorID)
 	if err != nil {

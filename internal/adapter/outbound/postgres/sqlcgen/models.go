@@ -38,14 +38,14 @@ type CourseProvider struct {
 type Event struct {
 	ID            int64
 	CourseID      int64
-	Date          sql.NullString
-	TeeTime       sql.NullString
 	OpenSpots     sql.NullInt32
 	NumberOfHoles sql.NullString
 	Private       sql.NullBool
 	HostID        int64
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	StartsAt      time.Time
+	TeeTimeID     sql.NullInt64
 }
 
 type Friendship struct {
@@ -100,6 +100,16 @@ type Reply struct {
 	PostID    int64
 	PlayerID  int64
 	Body      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type TeeTime struct {
+	ID        int64
+	CourseID  int64
+	StartsAt  time.Time
+	Holes     sql.NullString
+	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

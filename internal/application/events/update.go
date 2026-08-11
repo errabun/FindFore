@@ -22,6 +22,10 @@ func (s *Service) Update(ctx context.Context, actorID int64, e entity.Event, inv
 	}
 
 	e.HostID = existing.HostID
+	e.TeeTimeID = existing.TeeTimeID
+	if err := s.applyStartsAt(ctx, &e); err != nil {
+		return nil, err
+	}
 
 	if err := s.events.Update(ctx, e); err != nil {
 		return nil, fmt.Errorf("update event %d: %w", e.ID, err)

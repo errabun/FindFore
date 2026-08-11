@@ -44,6 +44,13 @@ func (s *Service) buildDetails(ctx context.Context, eventID int64) (*entity.Even
 	details.Closed = closed
 	details.RemainingSpots = details.OpenSpots - int32(len(accepted))
 
+	date, teeTime, err := SplitStartsAt(details.StartsAt, details.CourseTimezone)
+	if err != nil {
+		return nil, fmt.Errorf("split starts_at for event %d: %w", eventID, err)
+	}
+	details.Date = date
+	details.TeeTime = teeTime
+
 	return details, nil
 }
 
