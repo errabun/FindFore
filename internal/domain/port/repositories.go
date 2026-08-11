@@ -22,7 +22,9 @@ type PlayerRepository interface {
 type CourseRepository interface {
 	List(ctx context.Context) ([]entity.Course, error)
 	GetByNameAndCity(ctx context.Context, name, city string) (*entity.Course, error)
+	GetByProviderExternalID(ctx context.Context, provider, externalID string) (*entity.Course, error)
 	Create(ctx context.Context, c entity.Course) (*entity.Course, error)
+	UpsertProvider(ctx context.Context, courseID int64, provider, externalID string) error
 }
 
 type EventRepository interface {

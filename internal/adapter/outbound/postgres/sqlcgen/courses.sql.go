@@ -11,30 +11,42 @@ import (
 )
 
 const createCourse = `-- name: CreateCourse :one
-INSERT INTO courses (name, street, city, state, zip_code, phone, cost, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-RETURNING id, name, street, city, state, zip_code, phone, cost
+INSERT INTO courses (
+    name, street, city, state, zip_code, phone, cost,
+    country, latitude, longitude, timezone,
+    created_at, updated_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+RETURNING id, name, street, city, state, zip_code, phone, cost, country, latitude, longitude, timezone
 `
 
 type CreateCourseParams struct {
-	Name    sql.NullString
-	Street  sql.NullString
-	City    sql.NullString
-	State   sql.NullString
-	ZipCode sql.NullString
-	Phone   sql.NullString
-	Cost    sql.NullString
+	Name      sql.NullString
+	Street    sql.NullString
+	City      sql.NullString
+	State     sql.NullString
+	ZipCode   sql.NullString
+	Phone     sql.NullString
+	Cost      sql.NullString
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
 }
 
 type CreateCourseRow struct {
-	ID      int64
-	Name    sql.NullString
-	Street  sql.NullString
-	City    sql.NullString
-	State   sql.NullString
-	ZipCode sql.NullString
-	Phone   sql.NullString
-	Cost    sql.NullString
+	ID        int64
+	Name      sql.NullString
+	Street    sql.NullString
+	City      sql.NullString
+	State     sql.NullString
+	ZipCode   sql.NullString
+	Phone     sql.NullString
+	Cost      sql.NullString
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
 }
 
 func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (CreateCourseRow, error) {
@@ -46,6 +58,10 @@ func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (Cre
 		arg.ZipCode,
 		arg.Phone,
 		arg.Cost,
+		arg.Country,
+		arg.Latitude,
+		arg.Longitude,
+		arg.Timezone,
 	)
 	var i CreateCourseRow
 	err := row.Scan(
@@ -57,12 +73,57 @@ func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (Cre
 		&i.ZipCode,
 		&i.Phone,
 		&i.Cost,
+		&i.Country,
+		&i.Latitude,
+		&i.Longitude,
+		&i.Timezone,
+	)
+	return i, err
+}
+
+const getCourseByID = `-- name: GetCourseByID :one
+SELECT id, name, street, city, state, zip_code, phone, cost, country, latitude, longitude, timezone
+FROM courses
+WHERE id = $1
+`
+
+type GetCourseByIDRow struct {
+	ID        int64
+	Name      sql.NullString
+	Street    sql.NullString
+	City      sql.NullString
+	State     sql.NullString
+	ZipCode   sql.NullString
+	Phone     sql.NullString
+	Cost      sql.NullString
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
+}
+
+func (q *Queries) GetCourseByID(ctx context.Context, id int64) (GetCourseByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getCourseByID, id)
+	var i GetCourseByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Street,
+		&i.City,
+		&i.State,
+		&i.ZipCode,
+		&i.Phone,
+		&i.Cost,
+		&i.Country,
+		&i.Latitude,
+		&i.Longitude,
+		&i.Timezone,
 	)
 	return i, err
 }
 
 const getCourseByNameAndCity = `-- name: GetCourseByNameAndCity :one
-SELECT id, name, street, city, state, zip_code, phone, cost
+SELECT id, name, street, city, state, zip_code, phone, cost, country, latitude, longitude, timezone
 FROM courses
 WHERE name = $1 AND city = $2
 `
@@ -73,14 +134,18 @@ type GetCourseByNameAndCityParams struct {
 }
 
 type GetCourseByNameAndCityRow struct {
-	ID      int64
-	Name    sql.NullString
-	Street  sql.NullString
-	City    sql.NullString
-	State   sql.NullString
-	ZipCode sql.NullString
-	Phone   sql.NullString
-	Cost    sql.NullString
+	ID        int64
+	Name      sql.NullString
+	Street    sql.NullString
+	City      sql.NullString
+	State     sql.NullString
+	ZipCode   sql.NullString
+	Phone     sql.NullString
+	Cost      sql.NullString
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
 }
 
 func (q *Queries) GetCourseByNameAndCity(ctx context.Context, arg GetCourseByNameAndCityParams) (GetCourseByNameAndCityRow, error) {
@@ -95,25 +160,33 @@ func (q *Queries) GetCourseByNameAndCity(ctx context.Context, arg GetCourseByNam
 		&i.ZipCode,
 		&i.Phone,
 		&i.Cost,
+		&i.Country,
+		&i.Latitude,
+		&i.Longitude,
+		&i.Timezone,
 	)
 	return i, err
 }
 
 const listCourses = `-- name: ListCourses :many
-SELECT id, name, street, city, state, zip_code, phone, cost
+SELECT id, name, street, city, state, zip_code, phone, cost, country, latitude, longitude, timezone
 FROM courses
 ORDER BY id
 `
 
 type ListCoursesRow struct {
-	ID      int64
-	Name    sql.NullString
-	Street  sql.NullString
-	City    sql.NullString
-	State   sql.NullString
-	ZipCode sql.NullString
-	Phone   sql.NullString
-	Cost    sql.NullString
+	ID        int64
+	Name      sql.NullString
+	Street    sql.NullString
+	City      sql.NullString
+	State     sql.NullString
+	ZipCode   sql.NullString
+	Phone     sql.NullString
+	Cost      sql.NullString
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
 }
 
 func (q *Queries) ListCourses(ctx context.Context) ([]ListCoursesRow, error) {
@@ -134,6 +207,10 @@ func (q *Queries) ListCourses(ctx context.Context) ([]ListCoursesRow, error) {
 			&i.ZipCode,
 			&i.Phone,
 			&i.Cost,
+			&i.Country,
+			&i.Latitude,
+			&i.Longitude,
+			&i.Timezone,
 		); err != nil {
 			return nil, err
 		}

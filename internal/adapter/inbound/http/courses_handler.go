@@ -10,14 +10,20 @@ import (
 
 func mapCourseToResponse(c entity.Course) CourseResponse {
 	return CourseResponse{
-		ID:      c.ID,
-		Name:    c.Name,
-		Street:  c.Street,
-		City:    c.City,
-		State:   c.State,
-		ZipCode: c.ZipCode,
-		Phone:   c.Phone,
-		Cost:    c.Cost,
+		ID:         c.ID,
+		Name:       c.Name,
+		Street:     c.Street,
+		City:       c.City,
+		State:      c.State,
+		ZipCode:    c.ZipCode,
+		Phone:      c.Phone,
+		Cost:       c.Cost,
+		Country:    c.Country,
+		Latitude:   c.Latitude,
+		Longitude:  c.Longitude,
+		Timezone:   c.Timezone,
+		Provider:   c.Provider,
+		ExternalID: c.ExternalID,
 	}
 }
 
@@ -65,29 +71,30 @@ func (h *Handler) FindOrCreateCourse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := entity.Course{
-		Name:    req.Name,
-		Street:  req.Street,
-		City:    req.City,
-		State:   req.State,
-		ZipCode: req.ZipCode,
-		Phone:   req.Phone,
-		Cost:    req.Cost,
+		Name:       req.Name,
+		Street:     req.Street,
+		City:       req.City,
+		State:      req.State,
+		ZipCode:    req.ZipCode,
+		Phone:      req.Phone,
+		Cost:       req.Cost,
+		Country:    req.Country,
+		Latitude:   req.Latitude,
+		Longitude:  req.Longitude,
+		Timezone:   req.Timezone,
+		Provider:   req.Provider,
+		ExternalID: req.ExternalID,
 	}
 
-	result, err := h.courses.FindOrCreate(r.Context(), c)
+	result, created, err := h.courses.FindOrCreate(r.Context(), c)
 	if err != nil {
 		respondInternalError(w, r, err, "Failed to create course")
 		return
 	}
 
-	resp := mapCourseToResponse(*result)
-
-	// If the course already had an ID, it was found (200); otherwise created (201)
-	status := http.StatusCreated
-	if req.Name == result.Name && result.ID != 0 && req.ID == 0 {
-		// FindOrCreate found an existing one
-		status = http.StatusOK
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
 	}
-
-	respondJSON(w, status, resp)
+	respondJSON(w, status, mapCourseToResponse(*result))
 }

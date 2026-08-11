@@ -1,14 +1,20 @@
 package httphandler
 
 type CourseResponse struct {
-	ID      int64  `json:"id"`
-	Name    string `json:"name"`
-	Street  string `json:"street"`
-	City    string `json:"city"`
-	State   string `json:"state"`
-	ZipCode string `json:"zip_code"`
-	Phone   string `json:"phone"`
-	Cost    string `json:"cost"`
+	ID         int64    `json:"id"`
+	Name       string   `json:"name"`
+	Street     string   `json:"street"`
+	City       string   `json:"city"`
+	State      string   `json:"state"`
+	ZipCode    string   `json:"zip_code"`
+	Phone      string   `json:"phone"`
+	Cost       string   `json:"cost"`
+	Country    string   `json:"country,omitempty"`
+	Latitude   *float64 `json:"latitude,omitempty"`
+	Longitude  *float64 `json:"longitude,omitempty"`
+	Timezone   string   `json:"timezone,omitempty"`
+	Provider   string   `json:"provider,omitempty"`
+	ExternalID string   `json:"external_id,omitempty"`
 }
 
 type EventResponse struct {

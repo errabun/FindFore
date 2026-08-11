@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
@@ -19,18 +20,20 @@ type golfCourseAPIResponse struct {
 	Courses []golfCourseResult `json:"courses"`
 }
 
-// Only fields we actively use are declared, so upstream type changes on unused
-// fields (id, country, latitude/longitude) can't break unmarshaling.
 type golfCourseResult struct {
+	ID         json.RawMessage    `json:"id"`
 	ClubName   string             `json:"club_name"`
 	CourseName string             `json:"course_name"`
 	Location   golfCourseLocation `json:"location"`
 }
 
 type golfCourseLocation struct {
-	Address string `json:"address"`
-	City    string `json:"city"`
-	State   string `json:"state"`
+	Address   string   `json:"address"`
+	City      string   `json:"city"`
+	State     string   `json:"state"`
+	Country   string   `json:"country"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
 }
 
 // Client implements port.GolfCourseSearcher by calling the Golf Course API.
@@ -108,15 +111,44 @@ func (c *Client) Search(ctx context.Context, query string) ([]entity.Course, err
 			street = street[:idx]
 		}
 
+		country := cr.Location.Country
+		if country == "" {
+			country = "US"
+		}
+
 		results = append(results, entity.Course{
-			Name:   name,
-			Street: street,
-			City:   cr.Location.City,
-			State:  cr.Location.State,
+			Name:       name,
+			Street:     street,
+			City:       cr.Location.City,
+			State:      cr.Location.State,
+			Country:    country,
+			Latitude:   cr.Location.Latitude,
+			Longitude:  cr.Location.Longitude,
+			Provider:   entity.ProviderGolfCourseAPI,
+			ExternalID: parseExternalID(cr.ID),
 		})
 	}
 
 	return results, nil
+}
+
+func parseExternalID(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		return asString
+	}
+	var asNumber json.Number
+	if err := json.Unmarshal(raw, &asNumber); err == nil {
+		return asNumber.String()
+	}
+	var asInt int64
+	if err := json.Unmarshal(raw, &asInt); err == nil {
+		return strconv.FormatInt(asInt, 10)
+	}
+	return strings.Trim(string(raw), `"`)
 }
 
 func truncate(b []byte, n int) string {

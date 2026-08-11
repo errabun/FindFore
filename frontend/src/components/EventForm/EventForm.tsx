@@ -128,6 +128,12 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
         zip_code: selectedCourse.zip_code || '',
         phone: selectedCourse.phone || '',
         cost: selectedCourse.cost || '',
+        country: selectedCourse.country,
+        latitude: selectedCourse.latitude,
+        longitude: selectedCourse.longitude,
+        timezone: selectedCourse.timezone,
+        provider: selectedCourse.provider,
+        external_id: selectedCourse.external_id,
       });
 
       const formattedDate = dayjs(date).format('YYYY-MM-DD');

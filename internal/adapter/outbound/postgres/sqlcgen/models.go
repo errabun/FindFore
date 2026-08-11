@@ -20,6 +20,19 @@ type Course struct {
 	Cost      sql.NullString
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Country   sql.NullString
+	Latitude  sql.NullFloat64
+	Longitude sql.NullFloat64
+	Timezone  sql.NullString
+}
+
+type CourseProvider struct {
+	ID         int64
+	CourseID   int64
+	Provider   string
+	ExternalID string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type Event struct {

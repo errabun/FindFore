@@ -148,6 +148,12 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
           zip_code: selectedCourse.zip_code || '',
           phone: selectedCourse.phone || '',
           cost: selectedCourse.cost || '',
+          country: selectedCourse.country,
+          latitude: selectedCourse.latitude,
+          longitude: selectedCourse.longitude,
+          timezone: selectedCourse.timezone,
+          provider: selectedCourse.provider,
+          external_id: selectedCourse.external_id,
         });
         courseId = saved.id;
       }

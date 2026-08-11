@@ -106,8 +106,8 @@ func (stubCourses) List(context.Context) ([]entity.Course, error) { return nil, 
 func (stubCourses) Search(context.Context, string) ([]entity.Course, error) {
 	return nil, nil
 }
-func (stubCourses) FindOrCreate(context.Context, entity.Course) (*entity.Course, error) {
-	return nil, nil
+func (stubCourses) FindOrCreate(context.Context, entity.Course) (*entity.Course, bool, error) {
+	return nil, false, nil
 }
 
 type stubPlayerEvents struct {
