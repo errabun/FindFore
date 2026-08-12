@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -44,6 +45,28 @@ type EventRepository interface {
 	Update(ctx context.Context, e entity.Event) error
 	Delete(ctx context.Context, id int64) error
 	DeletePast(ctx context.Context) error
+}
+
+type TeeTimeRepository interface {
+	GetByID(ctx context.Context, id int64) (*entity.TeeTime, error)
+	ListByCourseAndWindow(ctx context.Context, courseID int64, from, to time.Time) ([]entity.TeeTime, error)
+	GetByProviderExternalID(ctx context.Context, provider, externalID string) (*entity.TeeTime, error)
+	Create(ctx context.Context, t entity.TeeTime) (*entity.TeeTime, error)
+	UpdateCache(ctx context.Context, t entity.TeeTime) (*entity.TeeTime, error)
+	UpdateStatus(ctx context.Context, id int64, status string) (*entity.TeeTime, error)
+	GetProvider(ctx context.Context, provider, externalID string) (*entity.TeeTimeProvider, error)
+	// LinkProvider associates (provider, external_id) with teeTimeID.
+	// Idempotent when the link already points at the same tee time; returns
+	// entity.ErrProviderTeeTimeConflict when it points at a different tee time.
+	LinkProvider(ctx context.Context, teeTimeID int64, provider, externalID string) error
+}
+
+type ReservationRepository interface {
+	GetByID(ctx context.Context, id int64) (*entity.Reservation, error)
+	GetActiveByTeeTimeID(ctx context.Context, teeTimeID int64) (*entity.Reservation, error)
+	Create(ctx context.Context, r entity.Reservation, players []entity.ReservationPlayer) (*entity.Reservation, error)
+	Update(ctx context.Context, r entity.Reservation) (*entity.Reservation, error)
+	ListPlayers(ctx context.Context, reservationID int64) ([]entity.ReservationPlayer, error)
 }
 
 type PlayerEventRepository interface {

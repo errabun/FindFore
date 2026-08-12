@@ -133,9 +133,9 @@ func TestEventGetPrivateVisibility(t *testing.T) {
 	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{})
 
 	starts := futureStarts()
-	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4, StartsAt: starts}
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, OpenSpots: 4, PlannedStartsAt: starts}
 	eventRepo.details[10] = &entity.EventWithDetails{
-		ID: 10, HostID: 1, Private: true, OpenSpots: 4, StartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
+		ID: 10, HostID: 1, Private: true, OpenSpots: 4, PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
 	}
 	playerEvents.byStatus[10] = map[entity.InviteStatus][]int64{
 		entity.InviteStatusPending: {2},
@@ -160,9 +160,9 @@ func TestEventUpdateDeleteHostOnly(t *testing.T) {
 	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{})
 
 	starts := futureStarts()
-	eventRepo.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1, StartsAt: starts}
+	eventRepo.byID[5] = &entity.Event{ID: 5, HostID: 1, Private: false, OpenSpots: 4, CourseID: 1, PlannedStartsAt: starts}
 	eventRepo.details[5] = &entity.EventWithDetails{
-		ID: 5, HostID: 1, Private: false, OpenSpots: 4, StartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
+		ID: 5, HostID: 1, Private: false, OpenSpots: 4, PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
 	}
 
 	ctx := context.Background()

@@ -39,14 +39,14 @@ func (r *EventRepo) GetByID(ctx context.Context, id int64) (*entity.Event, error
 		return nil, err
 	}
 	return &entity.Event{
-		ID:            row.ID,
-		CourseID:      int32(row.CourseID),
-		StartsAt:      row.StartsAt,
-		TeeTimeID:     teeTimeIDPtr(row.TeeTimeID),
-		OpenSpots:     row.OpenSpots.Int32,
-		NumberOfHoles: row.NumberOfHoles.String,
-		Private:       row.Private.Bool,
-		HostID:        int32(row.HostID),
+		ID:              row.ID,
+		CourseID:        int32(row.CourseID),
+		PlannedStartsAt: row.PlannedStartsAt,
+		TeeTimeID:       teeTimeIDPtr(row.TeeTimeID),
+		OpenSpots:       row.OpenSpots.Int32,
+		NumberOfHoles:   row.NumberOfHoles.String,
+		Private:         row.Private.Bool,
+		HostID:          int32(row.HostID),
 	}, nil
 }
 
@@ -56,16 +56,16 @@ func (r *EventRepo) GetDetailsByID(ctx context.Context, id int64) (*entity.Event
 		return nil, err
 	}
 	return &entity.EventWithDetails{
-		ID:             row.ID,
-		CourseName:     row.CourseName.String,
-		CourseTimezone: row.CourseTimezone.String,
-		StartsAt:       row.StartsAt,
-		TeeTimeID:      teeTimeIDPtr(row.TeeTimeID),
-		OpenSpots:      row.OpenSpots.Int32,
-		NumberOfHoles:  row.NumberOfHoles.String,
-		Private:        row.Private.Bool,
-		HostName:       row.HostName.String,
-		HostID:         int32(row.HostID),
+		ID:              row.ID,
+		CourseName:      row.CourseName.String,
+		CourseTimezone:  row.CourseTimezone.String,
+		PlannedStartsAt: row.PlannedStartsAt,
+		TeeTimeID:       teeTimeIDPtr(row.TeeTimeID),
+		OpenSpots:       row.OpenSpots.Int32,
+		NumberOfHoles:   row.NumberOfHoles.String,
+		Private:         row.Private.Bool,
+		HostName:        row.HostName.String,
+		HostID:          int32(row.HostID),
 	}, nil
 }
 
@@ -114,19 +114,19 @@ func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int3
 
 func createEventParams(e entity.Event) sqlcgen.CreateEventParams {
 	return sqlcgen.CreateEventParams{
-		CourseID:      int64(e.CourseID),
-		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
-		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
-		Private:       sql.NullBool{Bool: e.Private, Valid: true},
-		HostID:        int64(e.HostID),
-		StartsAt:      e.StartsAt,
-		TeeTimeID:     nullTeeTimeID(e.TeeTimeID),
+		CourseID:        int64(e.CourseID),
+		OpenSpots:       sql.NullInt32{Int32: e.OpenSpots, Valid: true},
+		NumberOfHoles:   sql.NullString{String: e.NumberOfHoles, Valid: true},
+		Private:         sql.NullBool{Bool: e.Private, Valid: true},
+		HostID:          int64(e.HostID),
+		PlannedStartsAt: e.PlannedStartsAt,
+		TeeTimeID:       nullTeeTimeID(e.TeeTimeID),
 	}
 }
 
 func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
-	if e.StartsAt.IsZero() {
-		return 0, fmt.Errorf("starts_at is required")
+	if e.PlannedStartsAt.IsZero() {
+		return 0, fmt.Errorf("planned_starts_at is required")
 	}
 	row, err := r.q.CreateEvent(ctx, createEventParams(e))
 	if err != nil {
@@ -136,8 +136,8 @@ func (r *EventRepo) Create(ctx context.Context, e entity.Event) (int64, error) {
 }
 
 func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invitees []int64) (int64, error) {
-	if e.StartsAt.IsZero() {
-		return 0, fmt.Errorf("starts_at is required")
+	if e.PlannedStartsAt.IsZero() {
+		return 0, fmt.Errorf("planned_starts_at is required")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -200,17 +200,17 @@ func (r *EventRepo) CreateWithInvites(ctx context.Context, e entity.Event, invit
 }
 
 func (r *EventRepo) Update(ctx context.Context, e entity.Event) error {
-	if e.StartsAt.IsZero() {
-		return fmt.Errorf("starts_at is required")
+	if e.PlannedStartsAt.IsZero() {
+		return fmt.Errorf("planned_starts_at is required")
 	}
 	return r.q.UpdateEvent(ctx, sqlcgen.UpdateEventParams{
-		ID:            e.ID,
-		CourseID:      int64(e.CourseID),
-		OpenSpots:     sql.NullInt32{Int32: e.OpenSpots, Valid: true},
-		NumberOfHoles: sql.NullString{String: e.NumberOfHoles, Valid: true},
-		Private:       sql.NullBool{Bool: e.Private, Valid: true},
-		StartsAt:      e.StartsAt,
-		TeeTimeID:     nullTeeTimeID(e.TeeTimeID),
+		ID:              e.ID,
+		CourseID:        int64(e.CourseID),
+		OpenSpots:       sql.NullInt32{Int32: e.OpenSpots, Valid: true},
+		NumberOfHoles:   sql.NullString{String: e.NumberOfHoles, Valid: true},
+		Private:         sql.NullBool{Bool: e.Private, Valid: true},
+		PlannedStartsAt: e.PlannedStartsAt,
+		TeeTimeID:       nullTeeTimeID(e.TeeTimeID),
 	})
 }
 

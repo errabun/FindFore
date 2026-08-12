@@ -1,6 +1,6 @@
 # FindFore — Architecture
 
-**Last Updated:** August 07, 2026  
+**Last Updated:** August 11, 2026  
 **Status:** Living document — system shape, boundaries, and diagrams.
 
 > **Product direction:** [`VISION.md`](./VISION.md)  
@@ -68,25 +68,159 @@ flowchart TB
 | Provider Interface | Port that booking adapters implement |
 | Lightspeed / ForeUP / GolfNow | Concrete adapters; swappable without changing the service |
 
-### Social events vs booking inventory
+### Social events vs booking inventory (today)
 
 ```text
 courses
-  ├── course_providers     (vendor course identities)
-  ├── events               (social round coordination)
-  │     └── tee_time_id? → tee_times
-  └── tee_times            (concrete start instant at a course)
-        └── reservations   (future — booking lifecycle)
+  ├── course_providers
+  ├── events  → tee_time_id? → tee_times
+  └── tee_times
 ```
 
-- **`events`** = social round coordination (host, capacity/`open_spots`, invites). Not provider tee-sheet inventory.
-- **`events.starts_at TIMESTAMPTZ`** is the authoritative schedule instant. API still accepts/returns wall-clock `date` + `tee_time`; the app composes/splits using `courses.timezone` (fallback `America/Denver`). Past cleanup uses `starts_at < NOW()`.
-- **`tee_times`** = a concrete start at a course (`available|held|booked|cancelled`). Association is `event → tee_time` (nullable), never the reverse.
-- **`courses`** = canonical place + IANA timezone. Provider/external IDs are **not** attributes of `Course`.
-- **`course_providers`** = `(provider, external_id) → course_id` with immutable links (conflict on reassignment).
-- **`reservations`** (not migrated yet) attach to `tee_times`, not events. Provider slot IDs will use a `tee_time_providers` table later — not columns on `tee_times`.
-- Join/accept capacity is enforced under `SELECT … FOR UPDATE`; `UNIQUE (player_id, event_id)` is the duplicate-membership safety net.
+- Provider owns real tee-sheet inventory; FindFore stores a **normalized representation/cache**.
+- Association is always `event → tee_time` (nullable), never the reverse.
+- Join/accept capacity uses `SELECT … FOR UPDATE`; `UNIQUE (player_id, event_id)` is the membership safety net.
 - Production migrations must not silently delete user data without an explicit, reviewed data-migration strategy.
+
+See **Booking domain model** below. Schema: `tee_time_providers`, reservation tables, and `events.planned_starts_at` (migrations `000009`–`000011`).
+
+---
+
+## Booking domain model
+
+**Status:** Implemented in schema (`000009`–`000011`) + application/booking + Lightspeed stub adapter. HTTP booking routes and live Lightspeed HTTP mapping are still deferred.
+
+**Locked decisions**
+
+| Decision | Choice |
+|---|---|
+| Event time | **Option B:** `planned_starts_at` + optional `tee_time_id` — semantically distinct; no DB equality constraint |
+| Domain | Provider-agnostic entities and state machines |
+| First walkthrough | Lightspeed as concrete pressure-test; every step must still work for ForeUP (else push into the adapter) |
+| Party booking | `reservations` + `reservation_players`; event ≠ reservation |
+
+```mermaid
+flowchart TB
+  course[courses]
+  cp[course_providers]
+  tee[tee_times]
+  ttp[tee_time_providers]
+  res[reservations]
+  rp[reservation_players]
+  event[events]
+
+  course --> cp
+  course --> tee
+  tee --> ttp
+  tee --> res
+  res --> rp
+  event -->|"tee_time_id optional"| tee
+```
+
+```text
+                 FindFore domain
+                       │
+                 ┌─────┴─────┐
+                 │           │
+              TeeTime    Reservation
+                 │           │
+                 └─────┬─────┘
+                       │
+                 Provider identity
+                       │
+              ┌────────┴────────┐
+              │                 │
+          Lightspeed          ForeUP
+```
+
+### Entities
+
+| Entity | Owns | Does not own |
+|---|---|---|
+| `courses` | Place + IANA timezone (long-term NOT NULL) | Vendor IDs |
+| `course_providers` | Immutable `(provider, external_id) → course` | Tee sheet |
+| `tee_times` | FindFore slot: `course_id`, `starts_at`, cached holes/capacity/slots/price | Vendor slot id |
+| `tee_time_providers` | Immutable `(provider, external_id) → tee_time` | Social invites |
+| `reservations` | Party booking lifecycle against a tee time | Feed / friends |
+| `reservation_players` | Party members (`player_id` and/or `guest_name`) | Provider payload |
+| `events` | Social round: `planned_starts_at`, optional `tee_time_id` | Inventory / payment |
+
+**Association rules**
+
+- Event and reservation are **siblings** under a tee time, not the same row.
+- Many reservation attempts over time; at most one **non-terminal** (`pending` / `held` / `confirmed`) per tee time (app + later partial unique).
+- Planned vs tee-time instants may diverge (planned 8:00, selected 8:20). UX may warn; the DB must not reject.
+
+**Schema notes**
+
+- `tee_times` — cached `capacity`, `available_slots`, `price_cents`, `currency`; status `available \| held \| booked \| cancelled`.
+- `tee_time_providers` — `UNIQUE(provider, external_id)`, immutable reassignment (same as `course_providers`).
+- `reservations` / `reservation_players` — party booking; partial unique on active statuses per tee time.
+- `events.planned_starts_at` — display play time = linked `tee_times.starts_at` if present, else planned.
+
+### State machines
+
+**TeeTime**
+
+```text
+available ──hold/book──► held ──confirm──► booked
+    │                      │
+    │                      └──expire/fail──► available
+    └──sync cancel────────► cancelled
+```
+
+**Reservation**
+
+```text
+pending ──► held ──► confirmed
+   │          │          │
+   │          │          └──► cancelled
+   │          └──expire/fail──► failed
+   └──fail──► failed
+```
+
+Terminal: `cancelled`, `failed`, and `confirmed` until cancel. After fail/cancel, retry creates a **new** reservation row (unless resuming the same `pending`/`held`).
+
+### Twelve scenario walkthroughs
+
+Domain stays provider-agnostic. Lightspeed is the concrete walkthrough; **ForeUP health check** = “same domain transitions, different adapter DTO mapping.”
+
+| # | Flow | FindFore domain | Lightspeed (adapter only) | ForeUP health check |
+|---|---|---|---|---|
+| 1 | Search tee times | Upsert `tee_times` + `tee_time_providers` by external id; query by course + window | Fetch tee sheet; map slots → domain | Same upsert; different DTO map |
+| 2 | Display availability | Read cache (`available_slots`, status) | Optional light refresh | Same read model |
+| 3 | User selects tee time | Client holds FindFore `tee_time_id`; no reservation yet | N/A | Same |
+| 4 | Begin booking | Create `reservations` + `reservation_players`; `pending`/`held` + optional `hold_expires_at` | Hold/book API if supported | No hold API → skip `held`, confirm-only |
+| 5 | Provider succeeds | `confirmed` + `external_reservation_id`; refresh tee_time cache/status | Parse confirmation id | Same transitions |
+| 6 | Provider fails | `failed` + reason; tee_time stays bookable | Map error codes | Same |
+| 7 | Connection lost | Idempotency / resume in-flight; unique external id prevents double-book | Safe retry of same call | Same pattern |
+| 8 | User retries | Resume `pending`/`held`, or new row if terminal | Same adapter ops | Same |
+| 9 | Availability changes | Sync/webhook updates cache only; never invent unknown slots | Poll or webhook | Adapter-specific sync |
+| 10 | User cancels | Adapter cancel → `cancelled`; refresh tee_time | Cancel API | Same |
+| 11 | Provider cancel fails | Stay `confirmed`; surface error; do not free inventory | Error mapping | Same |
+| 12 | Social event linked | Set `events.tee_time_id`; keep planned time even if times differ | N/A | Same |
+
+Highest-risk flows: **4–8** (hold, fail, retry, idempotency).
+
+### Hexagonal placement
+
+- Use cases: [`internal/application/booking/`](./internal/application/booking/) — `search_availability`, `hold`, `confirm`, `cancel`
+- Port: `BookingProvider`; adapters under `internal/adapter/outbound/{lightspeed,foreup,...}`
+- Domain never imports vendor DTOs
+
+### Open items (first adapter kickoff — not blocking this design)
+
+- Hold TTL defaults when the provider supports holds
+- Webhook vs poll for availability sync
+- Currency / money source of truth (`price_cents` cache vs live quote)
+- Stale cache TTL for search results
+- Derive `courses.timezone` from geo/address; retire `America/Denver` fallback
+
+### Remaining work
+
+1. Wire HTTP booking routes (search / begin / confirm / cancel)
+2. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed`
+3. Resolve open items (hold TTL, webhook vs poll, money/cache TTL)
 
 ## Social → Identity Loop
 

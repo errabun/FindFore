@@ -1,10 +1,5 @@
-// Package booking will own provider tee-sheet booking (Lightspeed, ForeUP, GolfNow).
+// Package booking owns provider tee-sheet booking (Lightspeed, ForeUP, GolfNow).
 //
-// Grow toward action files as this domain matures:
-//
-//	service.go       — Service + constructor
-//	book.go          — place a hold / confirm booking
-//	cancel.go        — cancel a booking
-//	availability.go  — search live availability
-//	dto.go           — application DTOs when entities are not enough
+// Domain model (entities, state machines, 12 flows): see ARCHITECTURE.md
+// “Booking domain model”. Vendor DTOs stay in adapters.
 package booking

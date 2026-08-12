@@ -25,8 +25,8 @@ func (s *Service) applyStartsAt(ctx context.Context, e *entity.Event) error {
 	}
 	startsAt, err := ComposeStartsAt(e.Date, e.TeeTime, course.Timezone)
 	if err != nil {
-		return fmt.Errorf("compose starts_at: %w", err)
+		return fmt.Errorf("compose planned_starts_at: %w", err)
 	}
-	e.StartsAt = startsAt
+	e.PlannedStartsAt = startsAt
 	return nil
 }

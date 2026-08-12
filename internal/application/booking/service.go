@@ -1,9 +1,22 @@
 package booking
 
-// Service is the future booking application service (provider-backed).
-// Stubbed until Lightspeed (or another) adapter is wired.
-type Service struct{}
+import "github.com/ericrabun/findfore-go/internal/domain/port"
 
-func NewService() *Service {
-	return &Service{}
+// Service coordinates FindFore tee-time cache and provider bookings.
+type Service struct {
+	teeTimes     port.TeeTimeRepository
+	reservations port.ReservationRepository
+	provider     port.BookingProvider
+}
+
+func NewService(
+	teeTimes port.TeeTimeRepository,
+	reservations port.ReservationRepository,
+	provider port.BookingProvider,
+) *Service {
+	return &Service{
+		teeTimes:     teeTimes,
+		reservations: reservations,
+		provider:     provider,
+	}
 }

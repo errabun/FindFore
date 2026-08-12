@@ -36,16 +36,16 @@ type CourseProvider struct {
 }
 
 type Event struct {
-	ID            int64
-	CourseID      int64
-	OpenSpots     sql.NullInt32
-	NumberOfHoles sql.NullString
-	Private       sql.NullBool
-	HostID        int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	StartsAt      time.Time
-	TeeTimeID     sql.NullInt64
+	ID              int64
+	CourseID        int64
+	OpenSpots       sql.NullInt32
+	NumberOfHoles   sql.NullString
+	Private         sql.NullBool
+	HostID          int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	PlannedStartsAt time.Time
+	TeeTimeID       sql.NullInt64
 }
 
 type Friendship struct {
@@ -104,12 +104,48 @@ type Reply struct {
 	UpdatedAt time.Time
 }
 
+type Reservation struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+type ReservationPlayer struct {
+	ID            int64
+	ReservationID int64
+	PlayerID      sql.NullInt64
+	GuestName     sql.NullString
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type TeeTime struct {
-	ID        int64
-	CourseID  int64
-	StartsAt  time.Time
-	Holes     sql.NullString
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID             int64
+	CourseID       int64
+	StartsAt       time.Time
+	Holes          sql.NullString
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Capacity       sql.NullInt32
+	AvailableSlots sql.NullInt32
+	PriceCents     sql.NullInt32
+	Currency       sql.NullString
+}
+
+type TeeTimeProvider struct {
+	ID         int64
+	TeeTimeID  int64
+	Provider   string
+	ExternalID string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
