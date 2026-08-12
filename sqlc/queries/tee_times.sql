@@ -56,6 +56,11 @@ SELECT id, tee_time_id, provider, external_id
 FROM tee_time_providers
 WHERE provider = $1 AND external_id = $2;
 
+-- name: GetTeeTimeProviderByTeeTimeAndProvider :one
+SELECT id, tee_time_id, provider, external_id
+FROM tee_time_providers
+WHERE tee_time_id = $1 AND provider = $2;
+
 -- name: InsertTeeTimeProvider :one
 INSERT INTO tee_time_providers (tee_time_id, provider, external_id, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())

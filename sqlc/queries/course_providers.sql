@@ -10,6 +10,11 @@ SELECT id, course_id, provider, external_id
 FROM course_providers
 WHERE provider = $1 AND external_id = $2;
 
+-- name: GetCourseProviderByCourseAndProvider :one
+SELECT id, course_id, provider, external_id
+FROM course_providers
+WHERE course_id = $1 AND provider = $2;
+
 -- name: InsertCourseProvider :one
 INSERT INTO course_providers (course_id, provider, external_id, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())

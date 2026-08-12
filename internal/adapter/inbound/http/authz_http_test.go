@@ -160,7 +160,7 @@ func testRouter(friendships stubFriendships) http.Handler {
 }
 
 func testRouterWith(playerEvents stubPlayerEvents, friendships stubFriendships) http.Handler {
-	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, playerEvents, friendships, stubPosts{})
+	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, playerEvents, friendships, stubPosts{}, nil)
 	return httphandler.NewRouter(h, testJWTSecret, stubTokenVersions{versions: map[int64]int32{1: 0, 2: 0}})
 }
 

@@ -8,8 +8,10 @@ import (
 
 	httphandler "github.com/ericrabun/findfore-go/internal/adapter/inbound/http"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/golfcourseapi"
+	"github.com/ericrabun/findfore-go/internal/adapter/outbound/lightspeed"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
+	"github.com/ericrabun/findfore-go/internal/application/booking"
 	"github.com/ericrabun/findfore-go/internal/application/courses"
 	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/application/feed"
@@ -49,6 +51,10 @@ func main() {
 	replyRepo := postgres.NewReplyRepo(queries)
 
 	golfCourseClient := golfcourseapi.NewClient(os.Getenv("GOLF_COURSE_API_KEY"))
+	teeTimeRepo := postgres.NewTeeTimeRepo(queries)
+	reservationRepo := postgres.NewReservationRepo(queries, db)
+	bookingProvider := lightspeed.NewClient(os.Getenv("LIGHTSPEED_BASE_URL"), os.Getenv("LIGHTSPEED_API_KEY"))
+	bookingSvc := booking.NewService(teeTimeRepo, reservationRepo, courseRepo, bookingProvider)
 
 	playerSvc := players.NewService(playerRepo, friendshipRepo)
 	sessionSvc := sessions.NewService(playerRepo, friendshipRepo, cfg.JWTSecret)
@@ -58,7 +64,7 @@ func main() {
 	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
 	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo)
 
-	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc)
+	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc, bookingSvc)
 	r := httphandler.NewRouter(h, cfg.JWTSecret, playerRepo)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

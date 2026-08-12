@@ -13,26 +13,30 @@ import (
 )
 
 // BeginBookingInput starts a party reservation against a FindFore tee time.
-type BeginBookingInput struct {
-	TeeTimeID         int64
-	BookedByPlayerID  int64
-	PartySize         int32
-	Players           []entity.ReservationPlayer
-	ExternalTeeTimeID string
-}
+// External provider ids are resolved inside the service — never accept them from clients.
+type BeginBookingInput = port.BeginBookingInput
+
+// BeginBookingResult includes whether a new reservation row was created (HTTP 201 vs 200).
+type BeginBookingResult = port.BeginBookingResult
 
 // BeginBooking creates a pending reservation with a FindFore-owned provider_request_id,
 // then asks the provider to hold. In-flight pending/held reservations for the same
 // booker resume by re-invoking Hold with the stored key.
-func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*entity.Reservation, error) {
+func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*BeginBookingResult, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
-	if in.PartySize <= 0 || in.TeeTimeID == 0 || in.BookedByPlayerID == 0 {
+	if in.ActorID == 0 || in.TeeTimeID == 0 {
 		return nil, ErrInvalidParty
 	}
-	if in.ExternalTeeTimeID == "" {
-		return nil, ErrProviderLinkMissing
+	partySize := int32(len(in.Players))
+	if partySize <= 0 {
+		return nil, ErrInvalidParty
+	}
+	for _, p := range in.Players {
+		if p.PlayerID == nil && p.GuestName == "" {
+			return nil, ErrInvalidParty
+		}
 	}
 
 	teeTime, err := s.teeTimes.GetByID(ctx, in.TeeTimeID)
@@ -46,10 +50,19 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*enti
 		return nil, fmt.Errorf("%w: tee time status %s", ErrReservationConflict, teeTime.Status)
 	}
 
+	externalID, err := s.resolveTeeTimeExternalID(ctx, in.TeeTimeID)
+	if err != nil {
+		return nil, errf("BeginBooking", err)
+	}
+
 	if active, err := s.reservations.GetActiveByTeeTimeID(ctx, in.TeeTimeID); err == nil {
-		if active.BookedByPlayerID == in.BookedByPlayerID &&
+		if active.BookedByPlayerID == in.ActorID &&
 			(active.Status == entity.ReservationStatusPending || active.Status == entity.ReservationStatusHeld) {
-			return s.applyHold(ctx, active, in)
+			res, holdErr := s.applyHold(ctx, active, externalID, in.Players)
+			if holdErr != nil {
+				return &BeginBookingResult{Reservation: res, Created: false}, holdErr
+			}
+			return &BeginBookingResult{Reservation: res, Created: false}, nil
 		}
 		return nil, entity.ErrActiveReservationExists
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -58,9 +71,9 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*enti
 
 	res, err := s.reservations.Create(ctx, entity.Reservation{
 		TeeTimeID:         in.TeeTimeID,
-		BookedByPlayerID:  in.BookedByPlayerID,
+		BookedByPlayerID:  in.ActorID,
 		Status:            entity.ReservationStatusPending,
-		PartySize:         in.PartySize,
+		PartySize:         partySize,
 		Provider:          s.provider.ProviderName(),
 		ProviderRequestID: uuid.NewString(),
 		QuotedPriceCents:  teeTime.PriceCents,
@@ -70,11 +83,25 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*enti
 		return nil, errf("BeginBooking", err)
 	}
 
-	return s.applyHold(ctx, res, in)
+	held, holdErr := s.applyHold(ctx, res, externalID, in.Players)
+	if holdErr != nil {
+		return &BeginBookingResult{Reservation: held, Created: true}, holdErr
+	}
+	return &BeginBookingResult{Reservation: held, Created: true}, nil
 }
 
-func (s *Service) applyHold(ctx context.Context, res *entity.Reservation, in BeginBookingInput) (*entity.Reservation, error) {
-	players := in.Players
+func (s *Service) resolveTeeTimeExternalID(ctx context.Context, teeTimeID int64) (string, error) {
+	link, err := s.teeTimes.GetProviderByTeeTime(ctx, teeTimeID, s.provider.ProviderName())
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrProviderLinkMissing
+		}
+		return "", err
+	}
+	return link.ExternalID, nil
+}
+
+func (s *Service) applyHold(ctx context.Context, res *entity.Reservation, externalTeeTimeID string, players []entity.ReservationPlayer) (*entity.Reservation, error) {
 	if len(players) == 0 {
 		var listErr error
 		players, listErr = s.reservations.ListPlayers(ctx, res.ID)
@@ -84,17 +111,18 @@ func (s *Service) applyHold(ctx context.Context, res *entity.Reservation, in Beg
 	}
 
 	hold, err := s.provider.Hold(ctx, port.HoldRequest{
-		ExternalTeeTimeID: in.ExternalTeeTimeID,
+		ExternalTeeTimeID: externalTeeTimeID,
 		PartySize:         res.PartySize,
 		Players:           players,
 		IdempotencyKey:    res.ProviderRequestID,
 	})
 	if err != nil {
 		if errors.Is(err, ErrProviderOutcomeUnknown) {
-			// Leave pending/held; client retries same reservation.
 			return res, errf("BeginBooking", err)
 		}
-		res.Status = entity.ReservationStatusFailed
+		if setErr := setReservationStatus(res, entity.ReservationStatusFailed); setErr != nil {
+			return nil, errf("BeginBooking", errors.Join(err, setErr))
+		}
 		res.FailureReason = err.Error()
 		updated, updateErr := s.reservations.Update(ctx, *res)
 		if updateErr != nil {
@@ -106,16 +134,17 @@ func (s *Service) applyHold(ctx context.Context, res *entity.Reservation, in Beg
 	res.ExternalReservationID = hold.ExternalReservationID
 	res.HoldExpiresAt = hold.HoldExpiresAt
 	res.FailureReason = ""
+	next := entity.ReservationStatusHeld
+	teeStatus := entity.TeeTimeStatusHeld
 	if hold.ConfirmedImmediately {
-		res.Status = entity.ReservationStatusConfirmed
-		if _, err := s.teeTimes.UpdateStatus(ctx, res.TeeTimeID, entity.TeeTimeStatusBooked); err != nil {
-			return nil, errf("BeginBooking", err)
-		}
-	} else {
-		res.Status = entity.ReservationStatusHeld
-		if _, err := s.teeTimes.UpdateStatus(ctx, res.TeeTimeID, entity.TeeTimeStatusHeld); err != nil {
-			return nil, errf("BeginBooking", err)
-		}
+		next = entity.ReservationStatusConfirmed
+		teeStatus = entity.TeeTimeStatusBooked
+	}
+	if setErr := setReservationStatus(res, next); setErr != nil {
+		return nil, errf("BeginBooking", setErr)
+	}
+	if _, err := s.teeTimes.UpdateStatus(ctx, res.TeeTimeID, teeStatus); err != nil {
+		return nil, errf("BeginBooking", err)
 	}
 	updated, err := s.reservations.Update(ctx, *res)
 	if err != nil {
@@ -133,13 +162,12 @@ func (s *Service) ExpireHold(ctx context.Context, reservationID int64, now time.
 		}
 		return nil, errf("ExpireHold", err)
 	}
-	if res.Status != entity.ReservationStatusHeld {
-		return nil, fmt.Errorf("%w: status %s", entity.ErrInvalidReservationTransition, res.Status)
-	}
 	if res.HoldExpiresAt == nil || !res.HoldExpiresAt.Before(now) {
 		return res, nil
 	}
-	res.Status = entity.ReservationStatusFailed
+	if err := setReservationStatus(res, entity.ReservationStatusFailed); err != nil {
+		return nil, errf("ExpireHold", err)
+	}
 	res.FailureReason = "hold expired"
 	updated, err := s.reservations.Update(ctx, *res)
 	if err != nil {

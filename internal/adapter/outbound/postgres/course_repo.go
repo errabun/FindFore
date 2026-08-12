@@ -154,6 +154,22 @@ func (r *CourseRepo) GetProvider(ctx context.Context, provider, externalID strin
 	}, nil
 }
 
+func (r *CourseRepo) GetProviderByCourse(ctx context.Context, courseID int64, provider string) (*entity.CourseProvider, error) {
+	row, err := r.q.GetCourseProviderByCourseAndProvider(ctx, sqlcgen.GetCourseProviderByCourseAndProviderParams{
+		CourseID: courseID,
+		Provider: provider,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &entity.CourseProvider{
+		ID:         row.ID,
+		CourseID:   row.CourseID,
+		Provider:   row.Provider,
+		ExternalID: row.ExternalID,
+	}, nil
+}
+
 func (r *CourseRepo) LinkProvider(ctx context.Context, courseID int64, provider, externalID string) error {
 	existing, err := r.GetProvider(ctx, provider, externalID)
 	if err == nil {

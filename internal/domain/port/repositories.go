@@ -27,6 +27,8 @@ type CourseRepository interface {
 	GetByProviderExternalID(ctx context.Context, provider, externalID string) (*entity.Course, error)
 	Create(ctx context.Context, c entity.Course) (*entity.Course, error)
 	GetProvider(ctx context.Context, provider, externalID string) (*entity.CourseProvider, error)
+	// GetProviderByCourse returns the provider link for a course + provider token.
+	GetProviderByCourse(ctx context.Context, courseID int64, provider string) (*entity.CourseProvider, error)
 	// LinkProvider associates (provider, external_id) with courseID.
 	// Idempotent when the link already points at the same course; returns
 	// entity.ErrProviderCourseConflict when it points at a different course.
@@ -55,6 +57,8 @@ type TeeTimeRepository interface {
 	UpdateCache(ctx context.Context, t entity.TeeTime) (*entity.TeeTime, error)
 	UpdateStatus(ctx context.Context, id int64, status string) (*entity.TeeTime, error)
 	GetProvider(ctx context.Context, provider, externalID string) (*entity.TeeTimeProvider, error)
+	// GetProviderByTeeTime returns the provider link for a tee time + provider token.
+	GetProviderByTeeTime(ctx context.Context, teeTimeID int64, provider string) (*entity.TeeTimeProvider, error)
 	// LinkProvider associates (provider, external_id) with teeTimeID.
 	// Idempotent when the link already points at the same tee time; returns
 	// entity.ErrProviderTeeTimeConflict when it points at a different tee time.

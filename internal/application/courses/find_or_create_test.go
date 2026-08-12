@@ -82,6 +82,16 @@ func (r *fakeCourseRepo) GetProvider(_ context.Context, provider, externalID str
 	return &cp, nil
 }
 
+func (r *fakeCourseRepo) GetProviderByCourse(_ context.Context, courseID int64, provider string) (*entity.CourseProvider, error) {
+	for _, p := range r.providers {
+		if p.CourseID == courseID && p.Provider == provider {
+			cp := *p
+			return &cp, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (r *fakeCourseRepo) LinkProvider(_ context.Context, courseID int64, provider, externalID string) error {
 	key := providerKey(provider, externalID)
 	if existing, ok := r.providers[key]; ok {

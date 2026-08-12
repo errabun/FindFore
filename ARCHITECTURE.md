@@ -88,7 +88,7 @@ See **Booking domain model** below. Schema: `tee_time_providers`, reservation ta
 
 ## Booking domain model
 
-**Status:** Hardening complete for this phase — schema `000012`, idempotent booking service, fake provider failure-matrix tests green. HTTP booking routes and live Lightspeed HTTP mapping remain deferred.
+**Status:** HTTP booking API shipped (provider-agnostic; fake-provider HTTP tests green). Live Lightspeed mapping remains deferred — review HTTP layer before wiring.
 
 **Locked decisions**
 
@@ -101,6 +101,8 @@ See **Booking domain model** below. Schema: `tee_time_providers`, reservation ta
 | Tee time status | FindFore **local knowledge** of the slot — not authoritative provider state |
 | Money | Tee time caches display price; reservation stores **quoted** price at begin |
 | Idempotency | FindFore-generated `provider_request_id` persisted before provider call; retries reuse it |
+| HTTP surface | FindFore IDs only (`course_id`, `tee_time_id`, `reservation_id`); never expose provider/external fields |
+| AuthZ | Only `booked_by_player_id` may confirm/cancel; enforced in the booking service |
 
 ```mermaid
 flowchart TB
@@ -192,6 +194,21 @@ pending ──► held ──► confirmed
 
 Terminal: `cancelled`, `failed`, and `confirmed` until cancel. After fail/cancel, retry creates a **new** reservation row (unless resuming the same `pending`/`held`).
 
+All status mutations go through `entity.CanTransitionReservation` / `TransitionReservation` (illegal edges rejected before persist).
+
+### HTTP booking API
+
+Authenticated (`/api/v1`):
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/courses/{courseID}/tee-times?from=&to=&players=` | Provider search + cache upsert; filter by `players` |
+| `POST` | `/reservations` | Body: `tee_time_id`, `players`; server owns `provider_request_id` |
+| `POST` | `/reservations/{id}/confirm` | Idempotent if already confirmed |
+| `POST` | `/reservations/{id}/cancel` | Idempotent if already cancelled |
+
+Unknown provider outcome → `503` + `provider_outcome_unknown`. Provider reject / conflicts → `409`. Not owner → `403`.
+
 ### Twelve scenario walkthroughs
 
 Domain stays provider-agnostic. Lightspeed is the concrete walkthrough; **ForeUP health check** = “same domain transitions, different adapter DTO mapping.”
@@ -230,9 +247,9 @@ Highest-risk flows: **4–8** (hold, fail, retry, idempotency).
 
 ### Remaining work
 
-1. ~~Fake provider + service failure-matrix tests~~ (done this phase)
-2. HTTP booking routes (next — after review of green failure tests)
-3. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed`
+1. ~~Fake provider + service failure-matrix tests~~
+2. ~~HTTP booking routes + HTTP/fake integration tests~~
+3. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed` (**next gate — after HTTP review**)
 4. ForeUP adapter (later)
 5. Resolve open items (hold TTL, webhook vs poll, stale-cache UX)
 

@@ -4,15 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
-// CancelBooking asks the provider to cancel a confirmed/held reservation.
-// On provider failure the reservation stays confirmed/held (inventory not freed).
-func (s *Service) CancelBooking(ctx context.Context, reservationID int64) (*entity.Reservation, error) {
+// CancelBooking asks the provider to cancel a confirmed/held/pending reservation.
+// On provider failure the reservation stays in its prior status (inventory not freed).
+func (s *Service) CancelBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
@@ -23,13 +22,11 @@ func (s *Service) CancelBooking(ctx context.Context, reservationID int64) (*enti
 		}
 		return nil, errf("CancelBooking", err)
 	}
+	if err := requireOwner(actorID, res); err != nil {
+		return nil, err
+	}
 	if res.Status == entity.ReservationStatusCancelled {
 		return res, nil
-	}
-	if res.Status != entity.ReservationStatusConfirmed &&
-		res.Status != entity.ReservationStatusHeld &&
-		res.Status != entity.ReservationStatusPending {
-		return nil, fmt.Errorf("%w: status %s", entity.ErrInvalidReservationTransition, res.Status)
 	}
 
 	if res.ExternalReservationID != "" || res.ProviderRequestID != "" {
@@ -37,15 +34,14 @@ func (s *Service) CancelBooking(ctx context.Context, reservationID int64) (*enti
 			ExternalReservationID: res.ExternalReservationID,
 			IdempotencyKey:        cancelIdempotencyKey(res.ProviderRequestID),
 		}); err != nil {
-			if errors.Is(err, ErrProviderOutcomeUnknown) {
-				return res, errf("CancelBooking", err)
-			}
-			// Flow 11: stay confirmed/held; do not free inventory.
+			// Flow 11 / unknown: stay confirmed/held; do not free inventory.
 			return res, errf("CancelBooking", err)
 		}
 	}
 
-	res.Status = entity.ReservationStatusCancelled
+	if setErr := setReservationStatus(res, entity.ReservationStatusCancelled); setErr != nil {
+		return nil, errf("CancelBooking", setErr)
+	}
 	res.FailureReason = ""
 	updated, err := s.reservations.Update(ctx, *res)
 	if err != nil {

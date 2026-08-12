@@ -131,6 +131,36 @@ func (q *Queries) GetTeeTimeProvider(ctx context.Context, arg GetTeeTimeProvider
 	return i, err
 }
 
+const getTeeTimeProviderByTeeTimeAndProvider = `-- name: GetTeeTimeProviderByTeeTimeAndProvider :one
+SELECT id, tee_time_id, provider, external_id
+FROM tee_time_providers
+WHERE tee_time_id = $1 AND provider = $2
+`
+
+type GetTeeTimeProviderByTeeTimeAndProviderParams struct {
+	TeeTimeID int64
+	Provider  string
+}
+
+type GetTeeTimeProviderByTeeTimeAndProviderRow struct {
+	ID         int64
+	TeeTimeID  int64
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) GetTeeTimeProviderByTeeTimeAndProvider(ctx context.Context, arg GetTeeTimeProviderByTeeTimeAndProviderParams) (GetTeeTimeProviderByTeeTimeAndProviderRow, error) {
+	row := q.db.QueryRowContext(ctx, getTeeTimeProviderByTeeTimeAndProvider, arg.TeeTimeID, arg.Provider)
+	var i GetTeeTimeProviderByTeeTimeAndProviderRow
+	err := row.Scan(
+		&i.ID,
+		&i.TeeTimeID,
+		&i.Provider,
+		&i.ExternalID,
+	)
+	return i, err
+}
+
 const insertTeeTime = `-- name: InsertTeeTime :one
 INSERT INTO tee_times (
     course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,

@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
@@ -59,4 +60,26 @@ type PostService interface {
 
 type GolfCourseSearcher interface {
 	Search(ctx context.Context, query string) ([]entity.CourseSearchResult, error)
+}
+
+// BeginBookingInput is the FindFore-ID-only input for starting a reservation.
+type BeginBookingInput struct {
+	ActorID   int64
+	TeeTimeID int64
+	Players   []entity.ReservationPlayer
+}
+
+// BeginBookingResult reports the reservation and whether a new row was created.
+type BeginBookingResult struct {
+	Reservation *entity.Reservation
+	Created     bool
+}
+
+// BookingService is the provider-agnostic booking application API (HTTP boundary).
+type BookingService interface {
+	SearchAvailability(ctx context.Context, courseID int64, from, to time.Time, minPlayers int32) ([]entity.TeeTime, error)
+	BeginBooking(ctx context.Context, in BeginBookingInput) (*BeginBookingResult, error)
+	ConfirmBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error)
+	CancelBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error)
+	ListReservationPlayers(ctx context.Context, reservationID int64) ([]entity.ReservationPlayer, error)
 }

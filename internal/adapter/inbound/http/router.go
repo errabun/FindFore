@@ -38,6 +38,11 @@ func NewRouter(h *Handler, jwtSecret string, tokenVersions mw.TokenVersionLookup
 			r.Use(mw.AuthRequired(jwtSecret, tokenVersions))
 
 			r.Post("/courses", h.FindOrCreateCourse)
+			r.Get("/courses/{courseID}/tee-times", h.ListCourseTeeTimes)
+
+			r.Post("/reservations", h.CreateReservation)
+			r.Post("/reservations/{id}/confirm", h.ConfirmReservation)
+			r.Post("/reservations/{id}/cancel", h.CancelReservation)
 
 			r.Get("/players", h.ListPlayers)
 			r.Patch("/players/{player_id}", h.UpdatePlayer)

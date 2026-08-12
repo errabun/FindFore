@@ -10,18 +10,35 @@ import (
 	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
-// SearchAvailability fetches provider slots for a course external id, upserts
-// tee_times + tee_time_providers (setting last_synced_at), and returns the cache.
+// SearchAvailability resolves the course's provider external id, fetches provider
+// slots, upserts tee_times + tee_time_providers, and returns the FindFore cache.
+// When minPlayers > 0, only slots with available_slots >= minPlayers (or unknown
+// available_slots) are returned.
 func (s *Service) SearchAvailability(
 	ctx context.Context,
 	courseID int64,
-	courseExternalID string,
 	from, to time.Time,
+	minPlayers int32,
 ) ([]entity.TeeTime, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
-	slots, err := s.provider.SearchAvailability(ctx, courseExternalID, from, to)
+	if courseID == 0 {
+		return nil, ErrCourseNotFound
+	}
+	if !from.Before(to) {
+		return nil, fmtInvalidWindow()
+	}
+
+	link, err := s.courses.GetProviderByCourse(ctx, courseID, s.provider.ProviderName())
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrProviderLinkMissing
+		}
+		return nil, errf("SearchAvailability", err)
+	}
+
+	slots, err := s.provider.SearchAvailability(ctx, link.ExternalID, from, to)
 	if err != nil {
 		return nil, errf("SearchAvailability", err)
 	}
@@ -36,7 +53,25 @@ func (s *Service) SearchAvailability(
 			return nil, errf("SearchAvailability", err)
 		}
 	}
-	return s.teeTimes.ListByCourseAndWindow(ctx, courseID, from, to)
+
+	listed, err := s.teeTimes.ListByCourseAndWindow(ctx, courseID, from, to)
+	if err != nil {
+		return nil, errf("SearchAvailability", err)
+	}
+	if minPlayers <= 0 {
+		return listed, nil
+	}
+	out := make([]entity.TeeTime, 0, len(listed))
+	for _, t := range listed {
+		if t.AvailableSlots == nil || *t.AvailableSlots >= minPlayers {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+func fmtInvalidWindow() error {
+	return errors.New("booking.SearchAvailability: from must be before to")
 }
 
 func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider string, slot port.BookingSlot, syncedAt time.Time) (*entity.TeeTime, error) {

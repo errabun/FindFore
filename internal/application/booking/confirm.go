@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 	"github.com/ericrabun/findfore-go/internal/domain/port"
@@ -12,7 +11,7 @@ import (
 
 // ConfirmBooking finalizes a held (or pending) reservation with the provider.
 // Retries reuse the reservation's provider_request_id as IdempotencyKey.
-func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, externalTeeTimeID string) (*entity.Reservation, error) {
+func (s *Service) ConfirmBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
@@ -23,18 +22,20 @@ func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, exter
 		}
 		return nil, errf("ConfirmBooking", err)
 	}
+	if err := requireOwner(actorID, res); err != nil {
+		return nil, err
+	}
 	if res.Status == entity.ReservationStatusConfirmed {
 		return res, nil
 	}
-	if res.Status != entity.ReservationStatusHeld && res.Status != entity.ReservationStatusPending {
-		return nil, fmt.Errorf("%w: status %s", entity.ErrInvalidReservationTransition, res.Status)
-	}
-	if externalTeeTimeID == "" {
-		return nil, ErrProviderLinkMissing
+
+	externalID, err := s.resolveTeeTimeExternalID(ctx, res.TeeTimeID)
+	if err != nil {
+		return nil, errf("ConfirmBooking", err)
 	}
 
 	result, err := s.provider.Confirm(ctx, port.ConfirmRequest{
-		ExternalTeeTimeID:     externalTeeTimeID,
+		ExternalTeeTimeID:     externalID,
 		ExternalReservationID: res.ExternalReservationID,
 		PartySize:             res.PartySize,
 		IdempotencyKey:        res.ProviderRequestID,
@@ -43,7 +44,9 @@ func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, exter
 		if errors.Is(err, ErrProviderOutcomeUnknown) {
 			return res, errf("ConfirmBooking", err)
 		}
-		res.Status = entity.ReservationStatusFailed
+		if setErr := setReservationStatus(res, entity.ReservationStatusFailed); setErr != nil {
+			return nil, errf("ConfirmBooking", errors.Join(err, setErr))
+		}
 		res.FailureReason = err.Error()
 		updated, updateErr := s.reservations.Update(ctx, *res)
 		if updateErr != nil {
@@ -53,7 +56,9 @@ func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, exter
 		return updated, errf("ConfirmBooking", err)
 	}
 
-	res.Status = entity.ReservationStatusConfirmed
+	if setErr := setReservationStatus(res, entity.ReservationStatusConfirmed); setErr != nil {
+		return nil, errf("ConfirmBooking", setErr)
+	}
 	if result != nil && result.ExternalReservationID != "" {
 		res.ExternalReservationID = result.ExternalReservationID
 	}

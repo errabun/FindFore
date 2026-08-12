@@ -196,6 +196,22 @@ func (r *TeeTimeRepo) GetProvider(ctx context.Context, provider, externalID stri
 	}, nil
 }
 
+func (r *TeeTimeRepo) GetProviderByTeeTime(ctx context.Context, teeTimeID int64, provider string) (*entity.TeeTimeProvider, error) {
+	row, err := r.q.GetTeeTimeProviderByTeeTimeAndProvider(ctx, sqlcgen.GetTeeTimeProviderByTeeTimeAndProviderParams{
+		TeeTimeID: teeTimeID,
+		Provider:  provider,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &entity.TeeTimeProvider{
+		ID:         row.ID,
+		TeeTimeID:  row.TeeTimeID,
+		Provider:   row.Provider,
+		ExternalID: row.ExternalID,
+	}, nil
+}
+
 func (r *TeeTimeRepo) LinkProvider(ctx context.Context, teeTimeID int64, provider, externalID string) error {
 	existing, err := r.GetProvider(ctx, provider, externalID)
 	if err == nil {

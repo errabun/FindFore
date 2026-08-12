@@ -83,6 +83,9 @@ func (fakeCourseRepo) Create(context.Context, entity.Course) (*entity.Course, er
 func (fakeCourseRepo) GetProvider(context.Context, string, string) (*entity.CourseProvider, error) {
 	return nil, sql.ErrNoRows
 }
+func (fakeCourseRepo) GetProviderByCourse(context.Context, int64, string) (*entity.CourseProvider, error) {
+	return nil, sql.ErrNoRows
+}
 func (fakeCourseRepo) LinkProvider(context.Context, int64, string, string) error { return nil }
 
 type fakePlayerEventRepo struct {

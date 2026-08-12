@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -51,6 +52,9 @@ var ErrReservationNotFound = errors.New("reservation not found")
 // ErrInvalidReservationTransition is returned for illegal status changes.
 var ErrInvalidReservationTransition = errors.New("invalid reservation status transition")
 
+// ErrReservationForbidden is returned when the actor is not allowed to mutate the reservation.
+var ErrReservationForbidden = errors.New("reservation action forbidden for this player")
+
 // IsTerminalReservation reports whether status is terminal (retry needs a new row).
 func IsTerminalReservation(status string) bool {
 	return status == ReservationStatusCancelled || status == ReservationStatusFailed
@@ -64,4 +68,34 @@ func IsActiveReservation(status string) bool {
 	default:
 		return false
 	}
+}
+
+// CanTransitionReservation reports whether from→to is a legal reservation status edge.
+// Same-status is not a transition (callers handle idempotent no-ops before calling).
+func CanTransitionReservation(from, to string) bool {
+	if from == to {
+		return false
+	}
+	switch from {
+	case ReservationStatusPending:
+		return to == ReservationStatusHeld || to == ReservationStatusConfirmed || to == ReservationStatusFailed
+	case ReservationStatusHeld:
+		return to == ReservationStatusConfirmed || to == ReservationStatusFailed || to == ReservationStatusCancelled
+	case ReservationStatusConfirmed:
+		return to == ReservationStatusCancelled
+	default:
+		return false
+	}
+}
+
+// TransitionReservation sets res.Status to to when the edge is legal.
+func TransitionReservation(res *Reservation, to string) error {
+	if res == nil {
+		return ErrReservationNotFound
+	}
+	if !CanTransitionReservation(res.Status, to) {
+		return fmt.Errorf("%w: %s -> %s", ErrInvalidReservationTransition, res.Status, to)
+	}
+	res.Status = to
+	return nil
 }

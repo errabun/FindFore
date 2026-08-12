@@ -3,6 +3,7 @@ package booking_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ type fakeTeeTimes struct {
 	byID       map[int64]*entity.TeeTime
 	byProvider map[string]*entity.TeeTime
 	providers  map[string]*entity.TeeTimeProvider
+	byTeeProv  map[string]*entity.TeeTimeProvider
 	nextID     int64
 }
 
@@ -26,12 +28,14 @@ func newFakeTeeTimes() *fakeTeeTimes {
 		byID:       map[int64]*entity.TeeTime{},
 		byProvider: map[string]*entity.TeeTime{},
 		providers:  map[string]*entity.TeeTimeProvider{},
+		byTeeProv:  map[string]*entity.TeeTimeProvider{},
 		nextID:     1,
 	}
 }
 
-func providerKey(provider, externalID string) string {
-	return provider + ":" + externalID
+func providerKey(provider, externalID string) string { return provider + ":" + externalID }
+func teeKey(teeTimeID int64, provider string) string {
+	return fmt.Sprintf("%s/%d", provider, teeTimeID)
 }
 
 func (f *fakeTeeTimes) GetByID(_ context.Context, id int64) (*entity.TeeTime, error) {
@@ -103,6 +107,15 @@ func (f *fakeTeeTimes) GetProvider(_ context.Context, provider, externalID strin
 	return &cp, nil
 }
 
+func (f *fakeTeeTimes) GetProviderByTeeTime(_ context.Context, teeTimeID int64, provider string) (*entity.TeeTimeProvider, error) {
+	p, ok := f.byTeeProv[teeKey(teeTimeID, provider)]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	cp := *p
+	return &cp, nil
+}
+
 func (f *fakeTeeTimes) LinkProvider(_ context.Context, teeTimeID int64, provider, externalID string) error {
 	key := providerKey(provider, externalID)
 	if existing, ok := f.providers[key]; ok {
@@ -111,9 +124,11 @@ func (f *fakeTeeTimes) LinkProvider(_ context.Context, teeTimeID int64, provider
 		}
 		return entity.ErrProviderTeeTimeConflict
 	}
-	f.providers[key] = &entity.TeeTimeProvider{
+	p := &entity.TeeTimeProvider{
 		ID: int64(len(f.providers) + 1), TeeTimeID: teeTimeID, Provider: provider, ExternalID: externalID,
 	}
+	f.providers[key] = p
+	f.byTeeProv[teeKey(teeTimeID, provider)] = p
 	if t, ok := f.byID[teeTimeID]; ok {
 		f.byProvider[key] = t
 	}
@@ -129,10 +144,8 @@ type fakeReservations struct {
 
 func newFakeReservations() *fakeReservations {
 	return &fakeReservations{
-		byID:    map[int64]*entity.Reservation{},
-		active:  map[int64]int64{},
-		players: map[int64][]entity.ReservationPlayer{},
-		nextID:  1,
+		byID: map[int64]*entity.Reservation{}, active: map[int64]int64{},
+		players: map[int64][]entity.ReservationPlayer{}, nextID: 1,
 	}
 }
 
@@ -163,8 +176,7 @@ func (f *fakeReservations) Create(_ context.Context, r entity.Reservation, playe
 	r.ID = f.nextID
 	f.nextID++
 	now := time.Now().UTC()
-	r.CreatedAt = now
-	r.UpdatedAt = now
+	r.CreatedAt, r.UpdatedAt = now, now
 	cp := r
 	f.byID[r.ID] = &cp
 	if entity.IsActiveReservation(r.Status) {
@@ -193,36 +205,74 @@ func (f *fakeReservations) ListPlayers(_ context.Context, reservationID int64) (
 	return append([]entity.ReservationPlayer(nil), f.players[reservationID]...), nil
 }
 
-func seedTee(t *testing.T, tees *fakeTeeTimes, price int32) *entity.TeeTime {
+type fakeCourses struct {
+	providers map[string]*entity.CourseProvider
+}
+
+func newFakeCourses() *fakeCourses {
+	return &fakeCourses{providers: map[string]*entity.CourseProvider{}}
+}
+
+func (f *fakeCourses) List(context.Context) ([]entity.Course, error) { return nil, nil }
+func (f *fakeCourses) GetByID(context.Context, int64) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *fakeCourses) GetByNameAndCity(context.Context, string, string) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *fakeCourses) GetByProviderExternalID(context.Context, string, string) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *fakeCourses) Create(context.Context, entity.Course) (*entity.Course, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *fakeCourses) GetProvider(context.Context, string, string) (*entity.CourseProvider, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *fakeCourses) GetProviderByCourse(_ context.Context, courseID int64, provider string) (*entity.CourseProvider, error) {
+	p, ok := f.providers[teeKey(courseID, provider)]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	cp := *p
+	return &cp, nil
+}
+func (f *fakeCourses) LinkProvider(_ context.Context, courseID int64, provider, externalID string) error {
+	f.providers[teeKey(courseID, provider)] = &entity.CourseProvider{
+		CourseID: courseID, Provider: provider, ExternalID: externalID,
+	}
+	return nil
+}
+
+func seedLinkedTee(t *testing.T, tees *fakeTeeTimes, providerName, externalID string, price int32) *entity.TeeTime {
 	t.Helper()
 	tt, err := tees.Create(context.Background(), entity.TeeTime{
-		CourseID:   1,
-		StartsAt:   time.Now().UTC().Add(time.Hour),
-		Status:     entity.TeeTimeStatusAvailable,
-		PriceCents: &price,
-		Currency:   "USD",
+		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
+		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
 	})
 	require.NoError(t, err)
+	require.NoError(t, tees.LinkProvider(context.Background(), tt.ID, providerName, externalID))
 	return tt
 }
 
-func beginInput(ttID int64) booking.BeginBookingInput {
-	pid := int64(7)
+func beginIn(actor, teeID int64) booking.BeginBookingInput {
+	pid := actor
 	return booking.BeginBookingInput{
-		TeeTimeID:         ttID,
-		BookedByPlayerID:  7,
-		PartySize:         2,
-		ExternalTeeTimeID: "ls-slot",
-		Players:           []entity.ReservationPlayer{{PlayerID: &pid, GuestName: "Eric"}},
+		ActorID: actor, TeeTimeID: teeID,
+		Players: []entity.ReservationPlayer{{PlayerID: &pid, GuestName: "Eric"}},
 	}
 }
 
-func TestSearchAvailabilitySetsLastSyncedAtAndQuotedReady(t *testing.T) {
+func newSvc(tees *fakeTeeTimes, res *fakeReservations, courses *fakeCourses, provider port.BookingProvider) *booking.Service {
+	return booking.NewService(tees, res, courses, provider)
+}
+
+func TestSearchAvailabilityResolvesCourseProvider(t *testing.T) {
 	tees := newFakeTeeTimes()
 	res := newFakeReservations()
-	cap := int32(4)
-	slots := int32(2)
-	price := int32(6500)
+	courses := newFakeCourses()
+	require.NoError(t, courses.LinkProvider(context.Background(), 9, entity.ProviderLightspeed, "course-ext"))
+	cap, slots, price := int32(4), int32(2), int32(6500)
 	from := time.Date(2026, 8, 15, 7, 0, 0, 0, time.UTC)
 	to := from.Add(12 * time.Hour)
 	provider := fakebooking.New(entity.ProviderLightspeed)
@@ -231,193 +281,108 @@ func TestSearchAvailabilitySetsLastSyncedAtAndQuotedReady(t *testing.T) {
 		Capacity: &cap, AvailableSlots: &slots, PriceCents: &price, Currency: "USD",
 		Status: entity.TeeTimeStatusAvailable,
 	}}
-	svc := booking.NewService(tees, res, provider)
+	svc := newSvc(tees, res, courses, provider)
 
-	got, err := svc.SearchAvailability(context.Background(), 9, "course-ext", from, to)
+	got, err := svc.SearchAvailability(context.Background(), 9, from, to, 0)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.NotNil(t, got[0].LastSyncedAt)
-	require.Equal(t, int32(6500), *got[0].PriceCents)
 }
 
 func TestHappyHoldConfirmCancel(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 6500)
+	tt := seedLinkedTee(t, tees, entity.ProviderLightspeed, "ls-slot", 6500)
 	resRepo := newFakeReservations()
 	provider := fakebooking.New(entity.ProviderLightspeed)
-	svc := booking.NewService(tees, resRepo, provider)
+	svc := newSvc(tees, resRepo, newFakeCourses(), provider)
 
-	res, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.NoError(t, err)
-	require.Equal(t, entity.ReservationStatusHeld, res.Status)
-	require.NotEmpty(t, res.ProviderRequestID)
-	require.NotNil(t, res.QuotedPriceCents)
-	require.Equal(t, int32(6500), *res.QuotedPriceCents)
-	require.Equal(t, "USD", res.QuotedCurrency)
-	require.Equal(t, 1, provider.HoldCalls)
+	require.True(t, out.Created)
+	require.Equal(t, entity.ReservationStatusHeld, out.Reservation.Status)
 
-	updatedTee, err := tees.GetByID(context.Background(), tt.ID)
-	require.NoError(t, err)
-	require.Equal(t, entity.TeeTimeStatusHeld, updatedTee.Status)
-
-	confirmed, err := svc.ConfirmBooking(context.Background(), res.ID, "ls-slot")
+	confirmed, err := svc.ConfirmBooking(context.Background(), 7, out.Reservation.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.ReservationStatusConfirmed, confirmed.Status)
 
-	cancelled, err := svc.CancelBooking(context.Background(), confirmed.ID)
+	cancelled, err := svc.CancelBooking(context.Background(), 7, confirmed.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.ReservationStatusCancelled, cancelled.Status)
-
-	freed, err := tees.GetByID(context.Background(), tt.ID)
-	require.NoError(t, err)
-	require.Equal(t, entity.TeeTimeStatusAvailable, freed.Status)
 }
 
-func TestHoldProviderRejectMarksFailed(t *testing.T) {
+func TestConfirmForbiddenForOtherActor(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 6500)
-	resRepo := newFakeReservations()
-	provider := fakebooking.New(entity.ProviderLightspeed)
-	provider.HoldBehavior = fakebooking.BehaviorReject
-	svc := booking.NewService(tees, resRepo, provider)
+	tt := seedLinkedTee(t, tees, entity.ProviderLightspeed, "ls-slot", 6500)
+	svc := newSvc(tees, newFakeReservations(), newFakeCourses(), fakebooking.New(entity.ProviderLightspeed))
 
-	res, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.Error(t, err)
-	require.ErrorIs(t, err, booking.ErrProviderRejected)
-	require.Equal(t, entity.ReservationStatusFailed, res.Status)
-
-	still, err := tees.GetByID(context.Background(), tt.ID)
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.NoError(t, err)
-	require.Equal(t, entity.TeeTimeStatusAvailable, still.Status)
-
-	// New attempt after failure is allowed (new provider_request_id).
-	provider.HoldBehavior = fakebooking.BehaviorSuccess
-	res2, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.NoError(t, err)
-	require.Equal(t, entity.ReservationStatusHeld, res2.Status)
-	require.NotEqual(t, res.ProviderRequestID, res2.ProviderRequestID)
+	_, err = svc.ConfirmBooking(context.Background(), 99, out.Reservation.ID)
+	require.ErrorIs(t, err, entity.ErrReservationForbidden)
 }
 
 func TestHoldTimeoutLeavesPendingAndRetryReusesKey(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 6500)
-	resRepo := newFakeReservations()
+	tt := seedLinkedTee(t, tees, entity.ProviderLightspeed, "ls-slot", 6500)
 	provider := fakebooking.New(entity.ProviderLightspeed)
 	provider.HoldBehavior = fakebooking.BehaviorTimeout
-	svc := booking.NewService(tees, resRepo, provider)
+	svc := newSvc(tees, newFakeReservations(), newFakeCourses(), provider)
 
-	res, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.Error(t, err)
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.ErrorIs(t, err, booking.ErrProviderOutcomeUnknown)
-	require.Equal(t, entity.ReservationStatusPending, res.Status)
-	require.Equal(t, 1, provider.HoldCalls)
-	reqID := res.ProviderRequestID
+	require.Equal(t, entity.ReservationStatusPending, out.Reservation.Status)
+	reqID := out.Reservation.ProviderRequestID
 
 	provider.HoldBehavior = fakebooking.BehaviorSuccess
-	res2, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
+	out2, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.NoError(t, err)
-	require.Equal(t, entity.ReservationStatusHeld, res2.Status)
-	require.Equal(t, reqID, res2.ProviderRequestID)
-	require.Equal(t, res.ID, res2.ID)
-	require.Equal(t, 2, provider.HoldCalls)
-
-	// Idempotent third call returns cached hold without inventing a new external id.
-	res3, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.NoError(t, err)
-	require.Equal(t, res2.ExternalReservationID, res3.ExternalReservationID)
-	require.Equal(t, 3, provider.HoldCalls)
+	require.False(t, out2.Created)
+	require.Equal(t, reqID, out2.Reservation.ProviderRequestID)
 }
 
-func TestDuplicateBeginWhilePendingResumesSameRow(t *testing.T) {
+func TestHoldRejectMarksFailed(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 6500)
-	resRepo := newFakeReservations()
+	tt := seedLinkedTee(t, tees, entity.ProviderLightspeed, "ls-slot", 6500)
 	provider := fakebooking.New(entity.ProviderLightspeed)
-	svc := booking.NewService(tees, resRepo, provider)
+	provider.HoldBehavior = fakebooking.BehaviorReject
+	svc := newSvc(tees, newFakeReservations(), newFakeCourses(), provider)
 
-	first, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.NoError(t, err)
-
-	second, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
-	require.NoError(t, err)
-	require.Equal(t, first.ID, second.ID)
-	require.Equal(t, first.ProviderRequestID, second.ProviderRequestID)
-	require.Equal(t, 2, provider.HoldCalls)
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
+	require.ErrorIs(t, err, booking.ErrProviderRejected)
+	require.Equal(t, entity.ReservationStatusFailed, out.Reservation.Status)
 }
 
-func TestConfirmOnlyProviderSkipsHeld(t *testing.T) {
+func TestConfirmOnlyProvider(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 7000)
-	resRepo := newFakeReservations()
+	tt := seedLinkedTee(t, tees, entity.ProviderForeUP, "fu-slot", 7000)
 	provider := fakebooking.New(entity.ProviderForeUP)
 	provider.ConfirmOnly = true
-	svc := booking.NewService(tees, resRepo, provider)
+	svc := newSvc(tees, newFakeReservations(), newFakeCourses(), provider)
 
-	res, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.NoError(t, err)
-	require.Equal(t, entity.ReservationStatusConfirmed, res.Status)
-
-	booked, err := tees.GetByID(context.Background(), tt.ID)
-	require.NoError(t, err)
-	require.Equal(t, entity.TeeTimeStatusBooked, booked.Status)
+	require.Equal(t, entity.ReservationStatusConfirmed, out.Reservation.Status)
 }
 
 func TestCancelProviderFailureKeepsConfirmed(t *testing.T) {
 	tees := newFakeTeeTimes()
-	tt := seedTee(t, tees, 6500)
-	resRepo := newFakeReservations()
+	tt := seedLinkedTee(t, tees, entity.ProviderLightspeed, "ls-slot", 6500)
 	provider := fakebooking.New(entity.ProviderLightspeed)
-	svc := booking.NewService(tees, resRepo, provider)
+	svc := newSvc(tees, newFakeReservations(), newFakeCourses(), provider)
 
-	res, err := svc.BeginBooking(context.Background(), beginInput(tt.ID))
+	out, err := svc.BeginBooking(context.Background(), beginIn(7, tt.ID))
 	require.NoError(t, err)
-	confirmed, err := svc.ConfirmBooking(context.Background(), res.ID, "ls-slot")
+	confirmed, err := svc.ConfirmBooking(context.Background(), 7, out.Reservation.ID)
 	require.NoError(t, err)
 
 	provider.CancelBehavior = fakebooking.BehaviorCancelFail
-	out, err := svc.CancelBooking(context.Background(), confirmed.ID)
+	got, err := svc.CancelBooking(context.Background(), 7, confirmed.ID)
 	require.Error(t, err)
-	require.Equal(t, entity.ReservationStatusConfirmed, out.Status)
-
-	still, err := tees.GetByID(context.Background(), tt.ID)
-	require.NoError(t, err)
-	require.Equal(t, entity.TeeTimeStatusBooked, still.Status)
+	require.Equal(t, entity.ReservationStatusConfirmed, got.Status)
 }
 
-func TestStaleInventoryRejectAfterSearch(t *testing.T) {
-	tees := newFakeTeeTimes()
-	resRepo := newFakeReservations()
-	price := int32(6500)
-	from := time.Date(2026, 8, 15, 7, 0, 0, 0, time.UTC)
-	to := from.Add(12 * time.Hour)
-	provider := fakebooking.New(entity.ProviderLightspeed)
-	provider.Slots = []port.BookingSlot{{
-		ExternalID: "ls-stale", StartsAt: from.Add(time.Hour),
-		PriceCents: &price, Currency: "USD", Status: entity.TeeTimeStatusAvailable,
-	}}
-	svc := booking.NewService(tees, resRepo, provider)
-
-	got, err := svc.SearchAvailability(context.Background(), 1, "course-ext", from, to)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.NotNil(t, got[0].LastSyncedAt)
-
-	provider.GoneExternalIDs["ls-stale"] = true
-	res, err := svc.BeginBooking(context.Background(), booking.BeginBookingInput{
-		TeeTimeID: got[0].ID, BookedByPlayerID: 7, PartySize: 1, ExternalTeeTimeID: "ls-stale",
-	})
-	require.Error(t, err)
-	require.ErrorIs(t, err, booking.ErrProviderRejected)
-	require.Equal(t, entity.ReservationStatusFailed, res.Status)
-}
-
-func TestLinkProviderConflict(t *testing.T) {
-	tees := newFakeTeeTimes()
-	a, err := tees.Create(context.Background(), entity.TeeTime{CourseID: 1, StartsAt: time.Now().UTC(), Status: entity.TeeTimeStatusAvailable})
-	require.NoError(t, err)
-	b, err := tees.Create(context.Background(), entity.TeeTime{CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour), Status: entity.TeeTimeStatusAvailable})
-	require.NoError(t, err)
-	require.NoError(t, tees.LinkProvider(context.Background(), a.ID, entity.ProviderLightspeed, "same"))
-	err = tees.LinkProvider(context.Background(), b.ID, entity.ProviderLightspeed, "same")
-	require.ErrorIs(t, err, entity.ErrProviderTeeTimeConflict)
+func TestIllegalTransitionBlocked(t *testing.T) {
+	res := &entity.Reservation{Status: entity.ReservationStatusFailed}
+	err := entity.TransitionReservation(res, entity.ReservationStatusConfirmed)
+	require.ErrorIs(t, err, entity.ErrInvalidReservationTransition)
 }

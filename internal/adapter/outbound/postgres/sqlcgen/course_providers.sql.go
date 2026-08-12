@@ -88,6 +88,36 @@ func (q *Queries) GetCourseProvider(ctx context.Context, arg GetCourseProviderPa
 	return i, err
 }
 
+const getCourseProviderByCourseAndProvider = `-- name: GetCourseProviderByCourseAndProvider :one
+SELECT id, course_id, provider, external_id
+FROM course_providers
+WHERE course_id = $1 AND provider = $2
+`
+
+type GetCourseProviderByCourseAndProviderParams struct {
+	CourseID int64
+	Provider string
+}
+
+type GetCourseProviderByCourseAndProviderRow struct {
+	ID         int64
+	CourseID   int64
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) GetCourseProviderByCourseAndProvider(ctx context.Context, arg GetCourseProviderByCourseAndProviderParams) (GetCourseProviderByCourseAndProviderRow, error) {
+	row := q.db.QueryRowContext(ctx, getCourseProviderByCourseAndProvider, arg.CourseID, arg.Provider)
+	var i GetCourseProviderByCourseAndProviderRow
+	err := row.Scan(
+		&i.ID,
+		&i.CourseID,
+		&i.Provider,
+		&i.ExternalID,
+	)
+	return i, err
+}
+
 const insertCourseProvider = `-- name: InsertCourseProvider :one
 INSERT INTO course_providers (course_id, provider, external_id, created_at, updated_at)
 VALUES ($1, $2, $3, NOW(), NOW())
