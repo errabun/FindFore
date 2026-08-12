@@ -307,6 +307,41 @@ func (e *bookingHTTPEnv) do(t *testing.T, method, path, body string, playerID in
 	return rec
 }
 
+func (e *bookingHTTPEnv) seedLinkedTee(t *testing.T, externalID string) *entity.TeeTime {
+	t.Helper()
+	price, slots := int32(6500), int32(4)
+	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
+		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
+		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+		AvailableSlots: &slots,
+	})
+	require.NoError(t, err)
+	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, externalID))
+	return tt
+}
+
+func beginBody(teeID int64, playersJSON string) string {
+	return fmt.Sprintf(`{"tee_time_id":%d,"players":%s}`, teeID, playersJSON)
+}
+
+type reservationJSON struct {
+	ID        int64  `json:"id"`
+	TeeTimeID int64  `json:"tee_time_id"`
+	Status    string `json:"status"`
+	PartySize int32  `json:"party_size"`
+	Players   []struct {
+		PlayerID  *int64 `json:"player_id"`
+		GuestName string `json:"guest_name"`
+	} `json:"players"`
+}
+
+func decodeReservation(t *testing.T, rec *httptest.ResponseRecorder) reservationJSON {
+	t.Helper()
+	var res reservationJSON
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	return res
+}
+
 func assertNoProviderLeak(t *testing.T, body []byte) {
 	t.Helper()
 	s := string(body)
@@ -322,6 +357,7 @@ func TestBookingHTTPUnauthenticated(t *testing.T) {
 	e := newBookingHTTPEnv(t)
 	rec := e.do(t, http.MethodGet, "/api/v1/courses/1/tee-times?from=2026-08-15T13:00:00Z&to=2026-08-15T20:00:00Z", "", 0)
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Equal(t, 0, e.provider.SearchCalls)
 }
 
 func TestBookingHTTPHappyPath(t *testing.T) {
@@ -340,6 +376,7 @@ func TestBookingHTTPHappyPath(t *testing.T) {
 		"", 1)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assertNoProviderLeak(t, rec.Body.Bytes())
+	require.Equal(t, 1, e.provider.SearchCalls)
 	var list struct {
 		TeeTimes []struct {
 			ID int64 `json:"id"`
@@ -353,81 +390,218 @@ func TestBookingHTTPHappyPath(t *testing.T) {
 	require.Len(t, list.TeeTimes, 1)
 	teeID := list.TeeTimes[0].ID
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1},{"guest_name":"John"}]}`, teeID)
-	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
+	body := beginBody(teeID, `[{"player_id":1},{"guest_name":"John"}]`)
+	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, "happy-key")
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assertNoProviderLeak(t, rec.Body.Bytes())
-	var res struct {
-		ID     int64  `json:"id"`
-		Status string `json:"status"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	res := decodeReservation(t, rec)
 	require.Equal(t, "held", res.Status)
+	require.Equal(t, 1, e.provider.HoldCalls)
+	holdKey := e.provider.LastHoldIdempotencyKey
+	require.NotEmpty(t, holdKey)
+	stored := e.res.byID[res.ID]
+	require.Equal(t, holdKey, stored.ProviderRequestID)
 
 	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 1)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assertNoProviderLeak(t, rec.Body.Bytes())
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	res = decodeReservation(t, rec)
 	require.Equal(t, "confirmed", res.Status)
+	require.Equal(t, 1, e.provider.ConfirmCalls)
+	require.Equal(t, holdKey, e.provider.LastConfirmIdempotencyKey)
 
-	// Idempotent confirm
+	// Idempotent confirm: no second provider confirm (service short-circuits)
 	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 1)
 	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, e.provider.ConfirmCalls)
 
 	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	res = decodeReservation(t, rec)
 	require.Equal(t, "cancelled", res.Status)
+	require.Equal(t, 1, e.provider.CancelCalls)
+	require.Equal(t, holdKey+":cancel", e.provider.LastCancelIdempotencyKey)
 
-	// Idempotent cancel
+	// Idempotent cancel: already cancelled — no second provider cancel
 	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
 	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "cancelled", decodeReservation(t, rec).Status)
+	require.Equal(t, 1, e.provider.CancelCalls)
 }
 
-func TestBookingHTTPTimeoutThenRetry(t *testing.T) {
+func TestBookingHTTPDuplicateIdempotencyKey(t *testing.T) {
 	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
-	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
+	tt := e.seedLinkedTee(t, "ls-dup")
+	body := beginBody(tt.ID, `[{"player_id":1}]`)
+	key := "same-client-key"
 
-	e.provider.HoldBehavior = fakebooking.BehaviorTimeout
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	key := "retry-key-1"
 	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
-	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	first := decodeReservation(t, rec)
+	require.Equal(t, 1, e.provider.HoldCalls)
+	providerKey := e.provider.LastHoldIdempotencyKey
 
-	e.provider.HoldBehavior = fakebooking.BehaviorSuccess
 	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
-	require.Equal(t, http.StatusOK, rec.Code) // resume, not created
-	var res struct {
-		Status string `json:"status"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
-	require.Equal(t, "held", res.Status)
-	assertNoProviderLeak(t, rec.Body.Bytes())
+	require.Equal(t, http.StatusOK, rec.Code)
+	second := decodeReservation(t, rec)
+	require.Equal(t, first.ID, second.ID)
+	require.Equal(t, 2, e.provider.HoldCalls)
+	require.Equal(t, []string{providerKey, providerKey}, e.provider.HoldIdempotencyKeys)
+}
+
+func TestBookingHTTPSameIdempotencyKeyDifferentPayload(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-payload")
+	key := "payload-key"
+
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", beginBody(tt.ID, `[{"player_id":1}]`), 1, key)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	first := decodeReservation(t, rec)
+	require.Equal(t, int32(1), first.PartySize)
+	providerKey := e.provider.LastHoldIdempotencyKey
+
+	// Different party in body — still resumes the original attempt
+	rec = e.do(t, http.MethodPost, "/api/v1/reservations",
+		beginBody(tt.ID, `[{"player_id":1},{"guest_name":"Extra"}]`), 1, key)
+	require.Equal(t, http.StatusOK, rec.Code)
+	second := decodeReservation(t, rec)
+	require.Equal(t, first.ID, second.ID)
+	require.Equal(t, int32(1), second.PartySize)
+	require.Equal(t, 2, e.provider.HoldCalls)
+	require.Equal(t, providerKey, e.provider.LastHoldIdempotencyKey)
 }
 
 func TestBookingHTTPProviderReject(t *testing.T) {
 	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
-	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
+	tt := e.seedLinkedTee(t, "ls-reject")
 	e.provider.HoldBehavior = fakebooking.BehaviorReject
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", beginBody(tt.ID, `[{"player_id":1}]`), 1, "reject-key")
 	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, 1, e.provider.HoldCalls)
+	require.NotEmpty(t, e.provider.LastHoldIdempotencyKey)
+	require.Equal(t, entity.ReservationStatusFailed, e.res.byID[1].Status)
 }
 
-func TestBookingHTTPStaleInventory(t *testing.T) {
+func TestBookingHTTPProviderTimeoutThenRetry(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-timeout")
+	body := beginBody(tt.ID, `[{"player_id":1}]`)
+	key := "timeout-key"
+
+	e.provider.HoldBehavior = fakebooking.BehaviorTimeout
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.Equal(t, 1, e.provider.HoldCalls)
+	providerKey := e.provider.LastHoldIdempotencyKey
+	require.Equal(t, entity.ReservationStatusPending, e.res.byID[1].Status)
+
+	e.provider.HoldBehavior = fakebooking.BehaviorSuccess
+	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
+	require.Equal(t, http.StatusOK, rec.Code)
+	res := decodeReservation(t, rec)
+	require.Equal(t, "held", res.Status)
+	require.Equal(t, int64(1), res.ID)
+	require.Equal(t, 2, e.provider.HoldCalls)
+	require.Equal(t, []string{providerKey, providerKey}, e.provider.HoldIdempotencyKeys)
+	assertNoProviderLeak(t, rec.Body.Bytes())
+}
+
+func TestBookingHTTPLostResponseRetry(t *testing.T) {
+	// Provider Hold succeeded and reservation is held, but the client never saw the 201.
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-lost")
+	body := beginBody(tt.ID, `[{"player_id":1}]`)
+	key := "lost-response-key"
+
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	first := decodeReservation(t, rec)
+	require.Equal(t, "held", first.Status)
+	require.Equal(t, 1, e.provider.HoldCalls)
+	providerKey := e.provider.LastHoldIdempotencyKey
+
+	// Client retries as if the first response was lost
+	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
+	require.Equal(t, http.StatusOK, rec.Code)
+	second := decodeReservation(t, rec)
+	require.Equal(t, first.ID, second.ID)
+	require.Equal(t, "held", second.Status)
+	require.Equal(t, 2, e.provider.HoldCalls)
+	require.Equal(t, []string{providerKey, providerKey}, e.provider.HoldIdempotencyKeys)
+}
+
+func TestBookingHTTPUnauthorizedCancel(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-authz-cancel")
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", beginBody(tt.ID, `[{"player_id":1}]`), 1, "authz-key")
+	require.Equal(t, http.StatusCreated, rec.Code)
+	res := decodeReservation(t, rec)
+	require.Equal(t, 1, e.provider.HoldCalls)
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 2)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, 0, e.provider.CancelCalls)
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 2)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	require.Equal(t, 0, e.provider.ConfirmCalls)
+}
+
+func TestBookingHTTPCancelIdempotency(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-cancel-idem")
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", beginBody(tt.ID, `[{"player_id":1}]`), 1, "cancel-idem-key")
+	require.Equal(t, http.StatusCreated, rec.Code)
+	res := decodeReservation(t, rec)
+	holdKey := e.provider.LastHoldIdempotencyKey
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "cancelled", decodeReservation(t, rec).Status)
+	require.Equal(t, 1, e.provider.CancelCalls)
+	require.Equal(t, holdKey+":cancel", e.provider.LastCancelIdempotencyKey)
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "cancelled", decodeReservation(t, rec).Status)
+	require.Equal(t, 1, e.provider.CancelCalls)
+}
+
+func TestBookingHTTPStaleCacheSearch(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	from := time.Date(2026, 8, 15, 13, 0, 0, 0, time.UTC)
+	to := from.Add(8 * time.Hour)
+	synced := from.Add(-time.Hour)
+	slots := int32(4)
+	_, err := e.tees.Create(context.Background(), entity.TeeTime{
+		CourseID: 1, StartsAt: from.Add(time.Hour),
+		Status: entity.TeeTimeStatusAvailable, AvailableSlots: &slots, LastSyncedAt: &synced,
+	})
+	require.NoError(t, err)
+
+	e.provider.SearchErr = errors.New("provider down")
+	rec := e.do(t, http.MethodGet,
+		fmt.Sprintf("/api/v1/courses/1/tee-times?from=%s&to=%s", from.Format(time.RFC3339), to.Format(time.RFC3339)),
+		"", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 1, e.provider.SearchCalls)
+	var list struct {
+		Source   string `json:"source"`
+		TeeTimes []struct {
+			ID int64 `json:"id"`
+		} `json:"tee_times"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
+	require.Equal(t, "cache", list.Source)
+	require.Len(t, list.TeeTimes, 1)
+	assertNoProviderLeak(t, rec.Body.Bytes())
+}
+
+func TestBookingHTTPStaleInventoryOnHold(t *testing.T) {
 	e := newBookingHTTPEnv(t)
 	from := time.Date(2026, 8, 15, 13, 0, 0, 0, time.UTC)
 	to := from.Add(8 * time.Hour)
@@ -450,152 +624,67 @@ func TestBookingHTTPStaleInventory(t *testing.T) {
 	require.Len(t, list.TeeTimes, 1)
 
 	e.provider.GoneExternalIDs["ls-stale"] = true
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, list.TeeTimes[0].ID)
-	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
+	rec = e.do(t, http.MethodPost, "/api/v1/reservations",
+		beginBody(list.TeeTimes[0].ID, `[{"player_id":1}]`), 1, "stale-hold")
 	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, 1, e.provider.HoldCalls)
 }
 
-func TestBookingHTTPCancelFailure(t *testing.T) {
+func TestBookingHTTPInvalidParty(t *testing.T) {
 	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+	tt := e.seedLinkedTee(t, "ls-party")
+
+	t.Run("whitespace_guest_name", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations",
+			beginBody(tt.ID, `[{"guest_name":"   "}]`), 1, "party-ws")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	var res struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
-
-	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 1)
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	e.provider.CancelBehavior = fakebooking.BehaviorCancelFail
-	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
-	require.Equal(t, http.StatusConflict, rec.Code)
-}
-
-func TestBookingHTTPAuthZ(t *testing.T) {
-	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+	t.Run("empty_players", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations",
+			fmt.Sprintf(`{"tee_time_id":%d,"players":[]}`, tt.ID), 1, "party-empty")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	var res struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
-
-	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 2)
-	require.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-func TestBookingHTTPRejectsProviderFieldsInBody(t *testing.T) {
-	// Server ignores unknown fields; ensure we never echo them.
-	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+	t.Run("party_too_large", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations",
+			beginBody(tt.ID, `[{"guest_name":"A"},{"guest_name":"B"},{"guest_name":"C"},{"guest_name":"D"},{"guest_name":"E"}]`),
+			1, "party-five")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
 
-	payload := map[string]any{
-		"tee_time_id":         tt.ID,
-		"provider":            "lightspeed",
-		"provider_request_id": "client-should-not-set",
-		"players":             []map[string]any{{"player_id": 1}},
-	}
-	b, _ := json.Marshal(payload)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", string(b), 1)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	assertNoProviderLeak(t, rec.Body.Bytes())
-}
-
-func TestBookingHTTPIdempotencyKeyDuplicate(t *testing.T) {
-	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+	t.Run("unknown_player_id", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations",
+			beginBody(tt.ID, `[{"player_id":0}]`), 1, "party-zero")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
-
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	key := "same-client-key"
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	var first struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &first))
-
-	rec = e.do(t, http.MethodPost, "/api/v1/reservations", body, 1, key)
-	require.Equal(t, http.StatusOK, rec.Code)
-	var second struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &second))
-	require.Equal(t, first.ID, second.ID)
 }
 
-func TestBookingHTTPCancelForbiddenForOtherPlayer(t *testing.T) {
+func TestBookingHTTPBodyLimits(t *testing.T) {
 	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+
+	t.Run("oversized_body_413", func(t *testing.T) {
+		huge := `{"tee_time_id":1,"players":[{"guest_name":"` + strings.Repeat("x", 20*1024) + `"}]}`
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations", huge, 1, "huge")
+		require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"player_id":1}]}`, tt.ID)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	var res struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
-
-	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 2)
-	require.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-func TestBookingHTTPWhitespaceGuestName(t *testing.T) {
-	e := newBookingHTTPEnv(t)
-	price := int32(6500)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: time.Now().UTC().Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, PriceCents: &price, Currency: "USD",
+	t.Run("truncated_json_400", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations", `{"tee_time_id":1,"players":[`, 1, "trunc")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
 	})
-	require.NoError(t, err)
-	require.NoError(t, e.tees.LinkProvider(context.Background(), tt.ID, entity.ProviderLightspeed, "ls-slot"))
 
-	body := fmt.Sprintf(`{"tee_time_id":%d,"players":[{"guest_name":"   "}]}`, tt.ID)
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", body, 1)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestBookingHTTPOversizedBody(t *testing.T) {
-	e := newBookingHTTPEnv(t)
-	huge := `{"tee_time_id":1,"players":[{"guest_name":"` + strings.Repeat("x", 20*1024) + `"}]}`
-	rec := e.do(t, http.MethodPost, "/api/v1/reservations", huge, 1)
-	require.True(t, rec.Code == http.StatusRequestEntityTooLarge || rec.Code == http.StatusBadRequest)
+	t.Run("malformed_json_400", func(t *testing.T) {
+		rec := e.do(t, http.MethodPost, "/api/v1/reservations", `{not-json`, 1, "bad")
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		require.Equal(t, 0, e.provider.HoldCalls)
+	})
 }
 
 func TestBookingHTTPInvalidWindow(t *testing.T) {
@@ -606,6 +695,7 @@ func TestBookingHTTPInvalidWindow(t *testing.T) {
 		fmt.Sprintf("/api/v1/courses/1/tee-times?from=%s&to=%s", from.Format(time.RFC3339), to.Format(time.RFC3339)),
 		"", 1)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, 0, e.provider.SearchCalls)
 }
 
 func TestBookingHTTPMissingIdempotencyKey(t *testing.T) {
@@ -618,35 +708,40 @@ func TestBookingHTTPMissingIdempotencyKey(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.router.ServeHTTP(rec, r)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, 0, e.provider.HoldCalls)
 }
 
-func TestBookingHTTPSearchCacheFallback(t *testing.T) {
+func TestBookingHTTPRejectsProviderFieldsInBody(t *testing.T) {
 	e := newBookingHTTPEnv(t)
-	from := time.Date(2026, 8, 15, 13, 0, 0, 0, time.UTC)
-	to := from.Add(8 * time.Hour)
-	synced := from.Add(-time.Hour)
-	slots := int32(4)
-	tt, err := e.tees.Create(context.Background(), entity.TeeTime{
-		CourseID: 1, StartsAt: from.Add(time.Hour),
-		Status: entity.TeeTimeStatusAvailable, AvailableSlots: &slots, LastSyncedAt: &synced,
-	})
-	require.NoError(t, err)
-	_ = tt
-
-	e.provider.SearchErr = errors.New("provider down")
-	rec := e.do(t, http.MethodGet,
-		fmt.Sprintf("/api/v1/courses/1/tee-times?from=%s&to=%s", from.Format(time.RFC3339), to.Format(time.RFC3339)),
-		"", 1)
-	require.Equal(t, http.StatusOK, rec.Code)
-	var list struct {
-		Source   string `json:"source"`
-		TeeTimes []struct {
-			ID int64 `json:"id"`
-		} `json:"tee_times"`
+	tt := e.seedLinkedTee(t, "ls-fields")
+	payload := map[string]any{
+		"tee_time_id":         tt.ID,
+		"provider":            "lightspeed",
+		"provider_request_id": "client-should-not-set",
+		"players":             []map[string]any{{"player_id": 1}},
 	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
-	require.Equal(t, "cache", list.Source)
-	require.Len(t, list.TeeTimes, 1)
+	b, _ := json.Marshal(payload)
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", string(b), 1, "fields-key")
+	require.Equal(t, http.StatusCreated, rec.Code)
 	assertNoProviderLeak(t, rec.Body.Bytes())
+	require.NotEqual(t, "client-should-not-set", e.provider.LastHoldIdempotencyKey)
+	require.Equal(t, e.res.byID[1].ProviderRequestID, e.provider.LastHoldIdempotencyKey)
+}
+
+func TestBookingHTTPCancelProviderFailure(t *testing.T) {
+	e := newBookingHTTPEnv(t)
+	tt := e.seedLinkedTee(t, "ls-cancel-fail")
+	rec := e.do(t, http.MethodPost, "/api/v1/reservations", beginBody(tt.ID, `[{"player_id":1}]`), 1, "cancel-fail")
+	require.Equal(t, http.StatusCreated, rec.Code)
+	res := decodeReservation(t, rec)
+
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/confirm", res.ID), "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	e.provider.CancelBehavior = fakebooking.BehaviorCancelFail
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/reservations/%d/cancel", res.ID), "", 1)
+	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, 1, e.provider.CancelCalls)
+	require.Equal(t, entity.ReservationStatusConfirmed, e.res.byID[res.ID].Status)
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -180,12 +179,7 @@ func (h *Handler) CreateReservation(w http.ResponseWriter, r *http.Request) {
 	var req beginReservationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) || errors.Is(err, io.ErrUnexpectedEOF) {
-			respondError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Request body too large")
-			return
-		}
-		// MaxBytesReader wraps as errors with "http: request body too large"
-		if strings.Contains(err.Error(), "request body too large") {
+		if errors.As(err, &maxErr) {
 			respondError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Request body too large")
 			return
 		}

@@ -42,9 +42,18 @@ type Provider struct {
 	// GoneExternalIDs causes Hold to reject for those tee-time external ids (stale inventory).
 	GoneExternalIDs map[string]bool
 
+	SearchCalls  int
 	HoldCalls    int
 	ConfirmCalls int
 	CancelCalls  int
+
+	// Last*IdempotencyKey is the most recent key passed to each method.
+	LastHoldIdempotencyKey    string
+	LastConfirmIdempotencyKey string
+	LastCancelIdempotencyKey  string
+
+	// HoldIdempotencyKeys is every Hold IdempotencyKey in call order.
+	HoldIdempotencyKeys []string
 
 	// holdByKey remembers successful hold results for idempotent retries.
 	holdByKey    map[string]*port.HoldResult
@@ -75,6 +84,7 @@ func (p *Provider) ProviderName() string {
 func (p *Provider) SearchAvailability(context.Context, string, time.Time, time.Time) ([]port.BookingSlot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.SearchCalls++
 	if p.SearchErr != nil {
 		return nil, p.SearchErr
 	}
@@ -87,6 +97,8 @@ func (p *Provider) Hold(_ context.Context, req port.HoldRequest) (*port.HoldResu
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.HoldCalls++
+	p.LastHoldIdempotencyKey = req.IdempotencyKey
+	p.HoldIdempotencyKeys = append(p.HoldIdempotencyKeys, req.IdempotencyKey)
 
 	if cached, ok := p.holdByKey[req.IdempotencyKey]; ok {
 		cp := *cached
@@ -123,6 +135,7 @@ func (p *Provider) Confirm(_ context.Context, req port.ConfirmRequest) (*port.Co
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.ConfirmCalls++
+	p.LastConfirmIdempotencyKey = req.IdempotencyKey
 
 	if cached, ok := p.confirmByKey[req.IdempotencyKey]; ok {
 		cp := *cached
@@ -150,6 +163,7 @@ func (p *Provider) Cancel(_ context.Context, req port.CancelRequest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.CancelCalls++
+	p.LastCancelIdempotencyKey = req.IdempotencyKey
 
 	if _, ok := p.cancelByKey[req.IdempotencyKey]; ok {
 		return nil
