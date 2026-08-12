@@ -1,6 +1,6 @@
 # FindFore — Architecture
 
-**Last Updated:** August 11, 2026  
+**Last Updated:** August 12, 2026  
 **Status:** Living document — system shape, boundaries, and diagrams.
 
 > **Product direction:** [`VISION.md`](./VISION.md)  
@@ -82,13 +82,13 @@ courses
 - Join/accept capacity uses `SELECT … FOR UPDATE`; `UNIQUE (player_id, event_id)` is the membership safety net.
 - Production migrations must not silently delete user data without an explicit, reviewed data-migration strategy.
 
-See **Booking domain model** below. Schema: `tee_time_providers`, reservation tables, and `events.planned_starts_at` (migrations `000009`–`000011`).
+See **Booking domain model** below. Schema: `tee_time_providers`, reservation tables, `events.planned_starts_at` (`000009`–`000011`), and hardening fields (`000012`: `provider_request_id`, quoted price, `last_synced_at`).
 
 ---
 
 ## Booking domain model
 
-**Status:** Implemented in schema (`000009`–`000011`) + application/booking + Lightspeed stub adapter. HTTP booking routes and live Lightspeed HTTP mapping are still deferred.
+**Status:** Hardening complete for this phase — schema `000012`, idempotent booking service, fake provider failure-matrix tests green. HTTP booking routes and live Lightspeed HTTP mapping remain deferred.
 
 **Locked decisions**
 
@@ -98,6 +98,9 @@ See **Booking domain model** below. Schema: `tee_time_providers`, reservation ta
 | Domain | Provider-agnostic entities and state machines |
 | First walkthrough | Lightspeed as concrete pressure-test; every step must still work for ForeUP (else push into the adapter) |
 | Party booking | `reservations` + `reservation_players`; event ≠ reservation |
+| Tee time status | FindFore **local knowledge** of the slot — not authoritative provider state |
+| Money | Tee time caches display price; reservation stores **quoted** price at begin |
+| Idempotency | FindFore-generated `provider_request_id` persisted before provider call; retries reuse it |
 
 ```mermaid
 flowchart TB
@@ -133,34 +136,42 @@ flowchart TB
           Lightspeed          ForeUP
 ```
 
+### Principles
+
+1. **`tee_times.status` is FindFore’s local knowledge**, not provider authority. Provider rejection → mark reservation `failed` and refresh cache from the provider; never invent `booked` without confirmation. Provider sync may overwrite cached status/slots.
+2. **Money:** tee time keeps cached `price_cents`/`currency` for display; reservation stores `quoted_price_cents`/`quoted_currency` at begin (what the user agreed to).
+3. **Cache freshness:** `tee_times.last_synced_at` is set on every successful provider search/upsert. UX can distinguish “checked 20s ago” from “checked 2h ago.”
+4. **Idempotency:** FindFore generates and persists `provider_request_id` **before** the provider call. Hold/Confirm send that UUID as `IdempotencyKey`. Cancel uses `{uuid}:cancel` in the adapter request only. External reservation id alone is insufficient (network loss before response). In-flight `pending`/`held` resumes **re-invoke** the provider with the same key. Known failure → `failed` + new row on next attempt. Unknown outcome (timeout) → leave `pending`/`held`, return `ErrProviderOutcomeUnknown`, retry same reservation. If a vendor lacks native idempotency headers, reconciliation stays in the adapter; domain only passes the key.
+
 ### Entities
 
 | Entity | Owns | Does not own |
 |---|---|---|
 | `courses` | Place + IANA timezone (long-term NOT NULL) | Vendor IDs |
 | `course_providers` | Immutable `(provider, external_id) → course` | Tee sheet |
-| `tee_times` | FindFore slot: `course_id`, `starts_at`, cached holes/capacity/slots/price | Vendor slot id |
+| `tee_times` | FindFore slot: `course_id`, `starts_at`, cached holes/capacity/slots/price, `last_synced_at` | Vendor slot id |
 | `tee_time_providers` | Immutable `(provider, external_id) → tee_time` | Social invites |
-| `reservations` | Party booking lifecycle against a tee time | Feed / friends |
-| `reservation_players` | Party members (`player_id` and/or `guest_name`) | Provider payload |
+| `reservations` | Party booking lifecycle, `provider_request_id`, quoted price | Feed / friends |
+| `reservation_players` | Party members (`player_id` and/or `guest_name`; both allowed — name for provider, id for FindFore) | Provider payload |
 | `events` | Social round: `planned_starts_at`, optional `tee_time_id` | Inventory / payment |
 
 **Association rules**
 
 - Event and reservation are **siblings** under a tee time, not the same row.
-- Many reservation attempts over time; at most one **non-terminal** (`pending` / `held` / `confirmed`) per tee time (app + later partial unique).
+- Many reservation attempts over time; at most one **non-terminal** (`pending` / `held` / `confirmed`) per tee time — enforced by partial unique `uq_reservations_active_tee_time` (`000010`).
 - Planned vs tee-time instants may diverge (planned 8:00, selected 8:20). UX may warn; the DB must not reject.
 
 **Schema notes**
 
-- `tee_times` — cached `capacity`, `available_slots`, `price_cents`, `currency`; status `available \| held \| booked \| cancelled`.
+- `tee_times` — cached `capacity`, `available_slots`, `price_cents`, `currency`, `last_synced_at`; status `available \| held \| booked \| cancelled` (local knowledge).
 - `tee_time_providers` — `UNIQUE(provider, external_id)`, immutable reassignment (same as `course_providers`).
-- `reservations` / `reservation_players` — party booking; partial unique on active statuses per tee time.
+- `reservations` — `provider_request_id` + `UNIQUE(provider, provider_request_id)`; `quoted_price_cents` / `quoted_currency`; partial unique on active statuses per tee time.
+- `reservation_players` — at least one of `player_id` / non-empty `guest_name` (`000010`).
 - `events.planned_starts_at` — display play time = linked `tee_times.starts_at` if present, else planned.
 
 ### State machines
 
-**TeeTime**
+**TeeTime** (FindFore knowledge)
 
 ```text
 available ──hold/book──► held ──confirm──► booked
@@ -187,16 +198,16 @@ Domain stays provider-agnostic. Lightspeed is the concrete walkthrough; **ForeUP
 
 | # | Flow | FindFore domain | Lightspeed (adapter only) | ForeUP health check |
 |---|---|---|---|---|
-| 1 | Search tee times | Upsert `tee_times` + `tee_time_providers` by external id; query by course + window | Fetch tee sheet; map slots → domain | Same upsert; different DTO map |
-| 2 | Display availability | Read cache (`available_slots`, status) | Optional light refresh | Same read model |
+| 1 | Search tee times | Upsert `tee_times` + `tee_time_providers` by external id; set `last_synced_at` | Fetch tee sheet; map slots → domain | Same upsert; different DTO map |
+| 2 | Display availability | Read cache (`available_slots`, status, `last_synced_at`) | Optional light refresh | Same read model |
 | 3 | User selects tee time | Client holds FindFore `tee_time_id`; no reservation yet | N/A | Same |
-| 4 | Begin booking | Create `reservations` + `reservation_players`; `pending`/`held` + optional `hold_expires_at` | Hold/book API if supported | No hold API → skip `held`, confirm-only |
+| 4 | Begin booking | Insert `pending` + `provider_request_id` + quoted price; Hold with that key | Hold/book API if supported | No hold API → skip `held`, confirm-only |
 | 5 | Provider succeeds | `confirmed` + `external_reservation_id`; refresh tee_time cache/status | Parse confirmation id | Same transitions |
-| 6 | Provider fails | `failed` + reason; tee_time stays bookable | Map error codes | Same |
-| 7 | Connection lost | Idempotency / resume in-flight; unique external id prevents double-book | Safe retry of same call | Same pattern |
-| 8 | User retries | Resume `pending`/`held`, or new row if terminal | Same adapter ops | Same |
+| 6 | Provider fails | `failed` + reason; tee_time stays bookable; refresh from provider | Map error codes | Same |
+| 7 | Connection lost | Leave `pending`/`held`; retry Hold with same `provider_request_id` | Safe retry / reconcile by key | Same pattern |
+| 8 | User retries | Resume `pending`/`held` (re-call provider), or new row if terminal | Same adapter ops | Same |
 | 9 | Availability changes | Sync/webhook updates cache only; never invent unknown slots | Poll or webhook | Adapter-specific sync |
-| 10 | User cancels | Adapter cancel → `cancelled`; refresh tee_time | Cancel API | Same |
+| 10 | User cancels | Adapter cancel (`{uuid}:cancel`) → `cancelled`; refresh tee_time | Cancel API | Same |
 | 11 | Provider cancel fails | Stay `confirmed`; surface error; do not free inventory | Error mapping | Same |
 | 12 | Social event linked | Set `events.tee_time_id`; keep planned time even if times differ | N/A | Same |
 
@@ -204,23 +215,26 @@ Highest-risk flows: **4–8** (hold, fail, retry, idempotency).
 
 ### Hexagonal placement
 
-- Use cases: [`internal/application/booking/`](./internal/application/booking/) — `search_availability`, `hold`, `confirm`, `cancel`
-- Port: `BookingProvider`; adapters under `internal/adapter/outbound/{lightspeed,foreup,...}`
+- Use cases: [`internal/application/booking/`](./internal/application/booking/) — search, begin, confirm, cancel
+- Port: `BookingProvider`; adapters under `internal/adapter/outbound/{fakebooking,lightspeed,foreup,...}`
 - Domain never imports vendor DTOs
+- Prove flows against **fake provider** before HTTP or live Lightspeed
 
-### Open items (first adapter kickoff — not blocking this design)
+### Open items (first live adapter kickoff)
 
 - Hold TTL defaults when the provider supports holds
 - Webhook vs poll for availability sync
-- Currency / money source of truth (`price_cents` cache vs live quote)
-- Stale cache TTL for search results
+- Stale-cache UX thresholds (when to force re-search)
 - Derive `courses.timezone` from geo/address; retire `America/Denver` fallback
+- Vendor-specific reconciliation when Lightspeed has no native idempotency header (adapter-only)
 
 ### Remaining work
 
-1. Wire HTTP booking routes (search / begin / confirm / cancel)
-2. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed`
-3. Resolve open items (hold TTL, webhook vs poll, money/cache TTL)
+1. ~~Fake provider + service failure-matrix tests~~ (done this phase)
+2. HTTP booking routes (next — after review of green failure tests)
+3. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed`
+4. ForeUP adapter (later)
+5. Resolve open items (hold TTL, webhook vs poll, stale-cache UX)
 
 ## Social → Identity Loop
 

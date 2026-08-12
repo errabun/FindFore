@@ -11,7 +11,7 @@ import (
 )
 
 // SearchAvailability fetches provider slots for a course external id, upserts
-// tee_times + tee_time_providers, and returns the FindFore cache for the window.
+// tee_times + tee_time_providers (setting last_synced_at), and returns the cache.
 func (s *Service) SearchAvailability(
 	ctx context.Context,
 	courseID int64,
@@ -26,19 +26,20 @@ func (s *Service) SearchAvailability(
 		return nil, errf("SearchAvailability", err)
 	}
 
+	now := time.Now().UTC()
 	provider := s.provider.ProviderName()
 	for _, slot := range slots {
 		if slot.ExternalID == "" {
 			continue
 		}
-		if _, err := s.upsertSlot(ctx, courseID, provider, slot); err != nil {
+		if _, err := s.upsertSlot(ctx, courseID, provider, slot, now); err != nil {
 			return nil, errf("SearchAvailability", err)
 		}
 	}
 	return s.teeTimes.ListByCourseAndWindow(ctx, courseID, from, to)
 }
 
-func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider string, slot port.BookingSlot) (*entity.TeeTime, error) {
+func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider string, slot port.BookingSlot, syncedAt time.Time) (*entity.TeeTime, error) {
 	status := slot.Status
 	if status == "" {
 		status = entity.TeeTimeStatusAvailable
@@ -53,6 +54,7 @@ func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider strin
 		existing.AvailableSlots = slot.AvailableSlots
 		existing.PriceCents = slot.PriceCents
 		existing.Currency = slot.Currency
+		existing.LastSyncedAt = &syncedAt
 		return s.teeTimes.UpdateCache(ctx, *existing)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -68,6 +70,7 @@ func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider strin
 		AvailableSlots: slot.AvailableSlots,
 		PriceCents:     slot.PriceCents,
 		Currency:       slot.Currency,
+		LastSyncedAt:   &syncedAt,
 	})
 	if err != nil {
 		return nil, err

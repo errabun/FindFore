@@ -6,6 +6,7 @@ import (
 )
 
 // TeeTime statuses mirror chk_tee_times_status.
+// Status is FindFore's local knowledge of the slot — not authoritative provider state.
 const (
 	TeeTimeStatusAvailable = "available"
 	TeeTimeStatusHeld      = "held"
@@ -24,6 +25,7 @@ type TeeTime struct {
 	AvailableSlots *int32
 	PriceCents     *int32
 	Currency       string
+	LastSyncedAt   *time.Time
 }
 
 // TeeTimeProvider maps a vendor slot identity onto a canonical tee time.

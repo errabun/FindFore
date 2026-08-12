@@ -8,19 +8,41 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const getActiveReservationByTeeTimeID = `-- name: GetActiveReservationByTeeTimeID :one
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
-       external_reservation_id, hold_expires_at, failure_reason, created_at, updated_at
+       external_reservation_id, hold_expires_at, failure_reason,
+       provider_request_id, quoted_price_cents, quoted_currency,
+       created_at, updated_at
 FROM reservations
 WHERE tee_time_id = $1
   AND status IN ('pending', 'held', 'confirmed')
 `
 
-func (q *Queries) GetActiveReservationByTeeTimeID(ctx context.Context, teeTimeID int64) (Reservation, error) {
+type GetActiveReservationByTeeTimeIDRow struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (q *Queries) GetActiveReservationByTeeTimeID(ctx context.Context, teeTimeID int64) (GetActiveReservationByTeeTimeIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getActiveReservationByTeeTimeID, teeTimeID)
-	var i Reservation
+	var i GetActiveReservationByTeeTimeIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TeeTimeID,
@@ -31,6 +53,9 @@ func (q *Queries) GetActiveReservationByTeeTimeID(ctx context.Context, teeTimeID
 		&i.ExternalReservationID,
 		&i.HoldExpiresAt,
 		&i.FailureReason,
+		&i.ProviderRequestID,
+		&i.QuotedPriceCents,
+		&i.QuotedCurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -39,14 +64,33 @@ func (q *Queries) GetActiveReservationByTeeTimeID(ctx context.Context, teeTimeID
 
 const getReservationByID = `-- name: GetReservationByID :one
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
-       external_reservation_id, hold_expires_at, failure_reason, created_at, updated_at
+       external_reservation_id, hold_expires_at, failure_reason,
+       provider_request_id, quoted_price_cents, quoted_currency,
+       created_at, updated_at
 FROM reservations
 WHERE id = $1
 `
 
-func (q *Queries) GetReservationByID(ctx context.Context, id int64) (Reservation, error) {
+type GetReservationByIDRow struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (q *Queries) GetReservationByID(ctx context.Context, id int64) (GetReservationByIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getReservationByID, id)
-	var i Reservation
+	var i GetReservationByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.TeeTimeID,
@@ -57,6 +101,9 @@ func (q *Queries) GetReservationByID(ctx context.Context, id int64) (Reservation
 		&i.ExternalReservationID,
 		&i.HoldExpiresAt,
 		&i.FailureReason,
+		&i.ProviderRequestID,
+		&i.QuotedPriceCents,
+		&i.QuotedCurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -66,11 +113,15 @@ func (q *Queries) GetReservationByID(ctx context.Context, id int64) (Reservation
 const insertReservation = `-- name: InsertReservation :one
 INSERT INTO reservations (
     tee_time_id, booked_by_player_id, status, party_size, provider,
-    external_reservation_id, hold_expires_at, failure_reason, created_at, updated_at
+    external_reservation_id, hold_expires_at, failure_reason,
+    provider_request_id, quoted_price_cents, quoted_currency,
+    created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
-          external_reservation_id, hold_expires_at, failure_reason, created_at, updated_at
+          external_reservation_id, hold_expires_at, failure_reason,
+          provider_request_id, quoted_price_cents, quoted_currency,
+          created_at, updated_at
 `
 
 type InsertReservationParams struct {
@@ -82,9 +133,29 @@ type InsertReservationParams struct {
 	ExternalReservationID sql.NullString
 	HoldExpiresAt         sql.NullTime
 	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
 }
 
-func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationParams) (Reservation, error) {
+type InsertReservationRow struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationParams) (InsertReservationRow, error) {
 	row := q.db.QueryRowContext(ctx, insertReservation,
 		arg.TeeTimeID,
 		arg.BookedByPlayerID,
@@ -94,8 +165,11 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		arg.ExternalReservationID,
 		arg.HoldExpiresAt,
 		arg.FailureReason,
+		arg.ProviderRequestID,
+		arg.QuotedPriceCents,
+		arg.QuotedCurrency,
 	)
-	var i Reservation
+	var i InsertReservationRow
 	err := row.Scan(
 		&i.ID,
 		&i.TeeTimeID,
@@ -106,6 +180,9 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		&i.ExternalReservationID,
 		&i.HoldExpiresAt,
 		&i.FailureReason,
+		&i.ProviderRequestID,
+		&i.QuotedPriceCents,
+		&i.QuotedCurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -181,10 +258,14 @@ SET status = $2,
     external_reservation_id = $3,
     hold_expires_at = $4,
     failure_reason = $5,
+    quoted_price_cents = $6,
+    quoted_currency = $7,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
-          external_reservation_id, hold_expires_at, failure_reason, created_at, updated_at
+          external_reservation_id, hold_expires_at, failure_reason,
+          provider_request_id, quoted_price_cents, quoted_currency,
+          created_at, updated_at
 `
 
 type UpdateReservationParams struct {
@@ -193,17 +274,38 @@ type UpdateReservationParams struct {
 	ExternalReservationID sql.NullString
 	HoldExpiresAt         sql.NullTime
 	FailureReason         sql.NullString
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
 }
 
-func (q *Queries) UpdateReservation(ctx context.Context, arg UpdateReservationParams) (Reservation, error) {
+type UpdateReservationRow struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (q *Queries) UpdateReservation(ctx context.Context, arg UpdateReservationParams) (UpdateReservationRow, error) {
 	row := q.db.QueryRowContext(ctx, updateReservation,
 		arg.ID,
 		arg.Status,
 		arg.ExternalReservationID,
 		arg.HoldExpiresAt,
 		arg.FailureReason,
+		arg.QuotedPriceCents,
+		arg.QuotedCurrency,
 	)
-	var i Reservation
+	var i UpdateReservationRow
 	err := row.Scan(
 		&i.ID,
 		&i.TeeTimeID,
@@ -214,6 +316,9 @@ func (q *Queries) UpdateReservation(ctx context.Context, arg UpdateReservationPa
 		&i.ExternalReservationID,
 		&i.HoldExpiresAt,
 		&i.FailureReason,
+		&i.ProviderRequestID,
+		&i.QuotedPriceCents,
+		&i.QuotedCurrency,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

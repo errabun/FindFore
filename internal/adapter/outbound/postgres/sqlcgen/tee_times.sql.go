@@ -13,7 +13,7 @@ import (
 
 const getTeeTimeByID = `-- name: GetTeeTimeByID :one
 SELECT id, course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-       created_at, updated_at
+       last_synced_at, created_at, updated_at
 FROM tee_times
 WHERE id = $1
 `
@@ -28,6 +28,7 @@ type GetTeeTimeByIDRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -45,6 +46,7 @@ func (q *Queries) GetTeeTimeByID(ctx context.Context, id int64) (GetTeeTimeByIDR
 		&i.AvailableSlots,
 		&i.PriceCents,
 		&i.Currency,
+		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,7 +55,7 @@ func (q *Queries) GetTeeTimeByID(ctx context.Context, id int64) (GetTeeTimeByIDR
 
 const getTeeTimeByProviderExternalID = `-- name: GetTeeTimeByProviderExternalID :one
 SELECT t.id, t.course_id, t.starts_at, t.holes, t.status, t.capacity, t.available_slots,
-       t.price_cents, t.currency, t.created_at, t.updated_at
+       t.price_cents, t.currency, t.last_synced_at, t.created_at, t.updated_at
 FROM tee_time_providers tp
 JOIN tee_times t ON t.id = tp.tee_time_id
 WHERE tp.provider = $1 AND tp.external_id = $2
@@ -74,6 +76,7 @@ type GetTeeTimeByProviderExternalIDRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -91,6 +94,7 @@ func (q *Queries) GetTeeTimeByProviderExternalID(ctx context.Context, arg GetTee
 		&i.AvailableSlots,
 		&i.PriceCents,
 		&i.Currency,
+		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -130,11 +134,11 @@ func (q *Queries) GetTeeTimeProvider(ctx context.Context, arg GetTeeTimeProvider
 const insertTeeTime = `-- name: InsertTeeTime :one
 INSERT INTO tee_times (
     course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-    created_at, updated_at
+    last_synced_at, created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 RETURNING id, course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-          created_at, updated_at
+          last_synced_at, created_at, updated_at
 `
 
 type InsertTeeTimeParams struct {
@@ -146,6 +150,7 @@ type InsertTeeTimeParams struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 }
 
 type InsertTeeTimeRow struct {
@@ -158,6 +163,7 @@ type InsertTeeTimeRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -172,6 +178,7 @@ func (q *Queries) InsertTeeTime(ctx context.Context, arg InsertTeeTimeParams) (I
 		arg.AvailableSlots,
 		arg.PriceCents,
 		arg.Currency,
+		arg.LastSyncedAt,
 	)
 	var i InsertTeeTimeRow
 	err := row.Scan(
@@ -184,6 +191,7 @@ func (q *Queries) InsertTeeTime(ctx context.Context, arg InsertTeeTimeParams) (I
 		&i.AvailableSlots,
 		&i.PriceCents,
 		&i.Currency,
+		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -223,7 +231,7 @@ func (q *Queries) InsertTeeTimeProvider(ctx context.Context, arg InsertTeeTimePr
 
 const listTeeTimesByCourseAndWindow = `-- name: ListTeeTimesByCourseAndWindow :many
 SELECT id, course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-       created_at, updated_at
+       last_synced_at, created_at, updated_at
 FROM tee_times
 WHERE course_id = $1
   AND starts_at >= $2
@@ -247,6 +255,7 @@ type ListTeeTimesByCourseAndWindowRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -270,6 +279,7 @@ func (q *Queries) ListTeeTimesByCourseAndWindow(ctx context.Context, arg ListTee
 			&i.AvailableSlots,
 			&i.PriceCents,
 			&i.Currency,
+			&i.LastSyncedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -295,10 +305,11 @@ SET holes = $2,
     price_cents = $6,
     currency = $7,
     starts_at = $8,
+    last_synced_at = $9,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-          created_at, updated_at
+          last_synced_at, created_at, updated_at
 `
 
 type UpdateTeeTimeCacheParams struct {
@@ -310,6 +321,7 @@ type UpdateTeeTimeCacheParams struct {
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
 	StartsAt       time.Time
+	LastSyncedAt   sql.NullTime
 }
 
 type UpdateTeeTimeCacheRow struct {
@@ -322,6 +334,7 @@ type UpdateTeeTimeCacheRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -336,6 +349,7 @@ func (q *Queries) UpdateTeeTimeCache(ctx context.Context, arg UpdateTeeTimeCache
 		arg.PriceCents,
 		arg.Currency,
 		arg.StartsAt,
+		arg.LastSyncedAt,
 	)
 	var i UpdateTeeTimeCacheRow
 	err := row.Scan(
@@ -348,6 +362,7 @@ func (q *Queries) UpdateTeeTimeCache(ctx context.Context, arg UpdateTeeTimeCache
 		&i.AvailableSlots,
 		&i.PriceCents,
 		&i.Currency,
+		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -359,7 +374,7 @@ UPDATE tee_times
 SET status = $2, updated_at = NOW()
 WHERE id = $1
 RETURNING id, course_id, starts_at, holes, status, capacity, available_slots, price_cents, currency,
-          created_at, updated_at
+          last_synced_at, created_at, updated_at
 `
 
 type UpdateTeeTimeStatusParams struct {
@@ -377,6 +392,7 @@ type UpdateTeeTimeStatusRow struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -394,6 +410,7 @@ func (q *Queries) UpdateTeeTimeStatus(ctx context.Context, arg UpdateTeeTimeStat
 		&i.AvailableSlots,
 		&i.PriceCents,
 		&i.Currency,
+		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

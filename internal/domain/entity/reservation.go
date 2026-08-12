@@ -25,11 +25,15 @@ type Reservation struct {
 	ExternalReservationID string
 	HoldExpiresAt         *time.Time
 	FailureReason         string
+	ProviderRequestID     string // FindFore-generated UUID; persisted before provider calls
+	QuotedPriceCents      *int32
+	QuotedCurrency        string
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
 
 // ReservationPlayer is a party member (FindFore player and/or guest name).
+// Both may be set: player_id = FindFore identity, guest_name = name submitted to provider.
 type ReservationPlayer struct {
 	ID            int64
 	ReservationID int64

@@ -11,7 +11,8 @@ import (
 )
 
 // ConfirmBooking finalizes a held (or pending) reservation with the provider.
-func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, externalTeeTimeID, idempotencyKey string) (*entity.Reservation, error) {
+// Retries reuse the reservation's provider_request_id as IdempotencyKey.
+func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, externalTeeTimeID string) (*entity.Reservation, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
@@ -36,9 +37,12 @@ func (s *Service) ConfirmBooking(ctx context.Context, reservationID int64, exter
 		ExternalTeeTimeID:     externalTeeTimeID,
 		ExternalReservationID: res.ExternalReservationID,
 		PartySize:             res.PartySize,
-		IdempotencyKey:        idempotencyKey,
+		IdempotencyKey:        res.ProviderRequestID,
 	})
 	if err != nil {
+		if errors.Is(err, ErrProviderOutcomeUnknown) {
+			return res, errf("ConfirmBooking", err)
+		}
 		res.Status = entity.ReservationStatusFailed
 		res.FailureReason = err.Error()
 		updated, updateErr := s.reservations.Update(ctx, *res)

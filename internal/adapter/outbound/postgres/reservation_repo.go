@@ -9,6 +9,7 @@ import (
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
+	"github.com/google/uuid"
 )
 
 type ReservationRepo struct {
@@ -20,24 +21,39 @@ func NewReservationRepo(q *sqlcgen.Queries, db *sql.DB) *ReservationRepo {
 	return &ReservationRepo{q: q, db: db}
 }
 
-func mapReservation(row sqlcgen.Reservation) entity.Reservation {
+func mapReservationRow(
+	id, teeTimeID, bookedBy int64,
+	status string,
+	partySize int32,
+	provider string,
+	externalID sql.NullString,
+	holdExpires sql.NullTime,
+	failure sql.NullString,
+	providerRequestID uuid.UUID,
+	quotedPrice sql.NullInt32,
+	quotedCurrency sql.NullString,
+	createdAt, updatedAt time.Time,
+) entity.Reservation {
 	var hold *time.Time
-	if row.HoldExpiresAt.Valid {
-		t := row.HoldExpiresAt.Time
+	if holdExpires.Valid {
+		t := holdExpires.Time
 		hold = &t
 	}
 	return entity.Reservation{
-		ID:                    row.ID,
-		TeeTimeID:             row.TeeTimeID,
-		BookedByPlayerID:      row.BookedByPlayerID,
-		Status:                row.Status,
-		PartySize:             row.PartySize,
-		Provider:              row.Provider,
-		ExternalReservationID: row.ExternalReservationID.String,
+		ID:                    id,
+		TeeTimeID:             teeTimeID,
+		BookedByPlayerID:      bookedBy,
+		Status:                status,
+		PartySize:             partySize,
+		Provider:              provider,
+		ExternalReservationID: externalID.String,
 		HoldExpiresAt:         hold,
-		FailureReason:         row.FailureReason.String,
-		CreatedAt:             row.CreatedAt,
-		UpdatedAt:             row.UpdatedAt,
+		FailureReason:         failure.String,
+		ProviderRequestID:     providerRequestID.String(),
+		QuotedPriceCents:      int32Ptr(quotedPrice),
+		QuotedCurrency:        quotedCurrency.String,
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
 	}
 }
 
@@ -60,7 +76,11 @@ func (r *ReservationRepo) GetByID(ctx context.Context, id int64) (*entity.Reserv
 	if err != nil {
 		return nil, err
 	}
-	out := mapReservation(row)
+	out := mapReservationRow(
+		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
+		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
+		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+	)
 	return &out, nil
 }
 
@@ -69,7 +89,11 @@ func (r *ReservationRepo) GetActiveByTeeTimeID(ctx context.Context, teeTimeID in
 	if err != nil {
 		return nil, err
 	}
-	out := mapReservation(row)
+	out := mapReservationRow(
+		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
+		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
+		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+	)
 	return &out, nil
 }
 
@@ -90,6 +114,10 @@ func (r *ReservationRepo) Create(ctx context.Context, res entity.Reservation, pl
 	if status == "" {
 		status = entity.ReservationStatusPending
 	}
+	reqID, err := uuid.Parse(res.ProviderRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("provider_request_id: %w", err)
+	}
 
 	row, err := qtx.InsertReservation(ctx, sqlcgen.InsertReservationParams{
 		TeeTimeID:             res.TeeTimeID,
@@ -100,6 +128,9 @@ func (r *ReservationRepo) Create(ctx context.Context, res entity.Reservation, pl
 		ExternalReservationID: sql.NullString{String: res.ExternalReservationID, Valid: res.ExternalReservationID != ""},
 		HoldExpiresAt:         hold,
 		FailureReason:         sql.NullString{String: res.FailureReason, Valid: res.FailureReason != ""},
+		ProviderRequestID:     reqID,
+		QuotedPriceCents:      nullInt32Ptr(res.QuotedPriceCents),
+		QuotedCurrency:        sql.NullString{String: res.QuotedCurrency, Valid: res.QuotedCurrency != ""},
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -126,7 +157,11 @@ func (r *ReservationRepo) Create(ctx context.Context, res entity.Reservation, pl
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit reservation: %w", err)
 	}
-	out := mapReservation(row)
+	out := mapReservationRow(
+		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
+		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
+		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+	)
 	return &out, nil
 }
 
@@ -141,6 +176,8 @@ func (r *ReservationRepo) Update(ctx context.Context, res entity.Reservation) (*
 		ExternalReservationID: sql.NullString{String: res.ExternalReservationID, Valid: res.ExternalReservationID != ""},
 		HoldExpiresAt:         hold,
 		FailureReason:         sql.NullString{String: res.FailureReason, Valid: res.FailureReason != ""},
+		QuotedPriceCents:      nullInt32Ptr(res.QuotedPriceCents),
+		QuotedCurrency:        sql.NullString{String: res.QuotedCurrency, Valid: res.QuotedCurrency != ""},
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -148,7 +185,11 @@ func (r *ReservationRepo) Update(ctx context.Context, res entity.Reservation) (*
 		}
 		return nil, err
 	}
-	out := mapReservation(row)
+	out := mapReservationRow(
+		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
+		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
+		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+	)
 	return &out, nil
 }
 

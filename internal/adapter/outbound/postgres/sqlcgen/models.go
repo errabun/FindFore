@@ -7,6 +7,8 @@ package sqlcgen
 import (
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Course struct {
@@ -116,6 +118,9 @@ type Reservation struct {
 	FailureReason         sql.NullString
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
 }
 
 type ReservationPlayer struct {
@@ -139,6 +144,7 @@ type TeeTime struct {
 	AvailableSlots sql.NullInt32
 	PriceCents     sql.NullInt32
 	Currency       sql.NullString
+	LastSyncedAt   sql.NullTime
 }
 
 type TeeTimeProvider struct {

@@ -33,6 +33,21 @@ func int32Ptr(n sql.NullInt32) *int32 {
 	return &v
 }
 
+func nullTimePtr(p *time.Time) sql.NullTime {
+	if p == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *p, Valid: true}
+}
+
+func timePtr(n sql.NullTime) *time.Time {
+	if !n.Valid {
+		return nil
+	}
+	t := n.Time
+	return &t
+}
+
 func mapTeeTime(
 	id, courseID int64,
 	startsAt time.Time,
@@ -40,6 +55,7 @@ func mapTeeTime(
 	status string,
 	capacity, availableSlots, priceCents sql.NullInt32,
 	currency sql.NullString,
+	lastSyncedAt sql.NullTime,
 ) entity.TeeTime {
 	return entity.TeeTime{
 		ID:             id,
@@ -51,6 +67,7 @@ func mapTeeTime(
 		AvailableSlots: int32Ptr(availableSlots),
 		PriceCents:     int32Ptr(priceCents),
 		Currency:       currency.String,
+		LastSyncedAt:   timePtr(lastSyncedAt),
 	}
 }
 
@@ -61,7 +78,7 @@ func (r *TeeTimeRepo) GetByID(ctx context.Context, id int64) (*entity.TeeTime, e
 	}
 	t := mapTeeTime(
 		row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 	)
 	return &t, nil
 }
@@ -79,7 +96,7 @@ func (r *TeeTimeRepo) ListByCourseAndWindow(ctx context.Context, courseID int64,
 	for i, row := range rows {
 		out[i] = mapTeeTime(
 			row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-			row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+			row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 		)
 	}
 	return out, nil
@@ -95,7 +112,7 @@ func (r *TeeTimeRepo) GetByProviderExternalID(ctx context.Context, provider, ext
 	}
 	t := mapTeeTime(
 		row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 	)
 	return &t, nil
 }
@@ -114,13 +131,14 @@ func (r *TeeTimeRepo) Create(ctx context.Context, t entity.TeeTime) (*entity.Tee
 		AvailableSlots: nullInt32Ptr(t.AvailableSlots),
 		PriceCents:     nullInt32Ptr(t.PriceCents),
 		Currency:       sql.NullString{String: t.Currency, Valid: t.Currency != ""},
+		LastSyncedAt:   nullTimePtr(t.LastSyncedAt),
 	})
 	if err != nil {
 		return nil, err
 	}
 	out := mapTeeTime(
 		row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 	)
 	return &out, nil
 }
@@ -135,13 +153,14 @@ func (r *TeeTimeRepo) UpdateCache(ctx context.Context, t entity.TeeTime) (*entit
 		PriceCents:     nullInt32Ptr(t.PriceCents),
 		Currency:       sql.NullString{String: t.Currency, Valid: t.Currency != ""},
 		StartsAt:       t.StartsAt,
+		LastSyncedAt:   nullTimePtr(t.LastSyncedAt),
 	})
 	if err != nil {
 		return nil, err
 	}
 	out := mapTeeTime(
 		row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 	)
 	return &out, nil
 }
@@ -156,7 +175,7 @@ func (r *TeeTimeRepo) UpdateStatus(ctx context.Context, id int64, status string)
 	}
 	out := mapTeeTime(
 		row.ID, row.CourseID, row.StartsAt, row.Holes, row.Status,
-		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency,
+		row.Capacity, row.AvailableSlots, row.PriceCents, row.Currency, row.LastSyncedAt,
 	)
 	return &out, nil
 }
