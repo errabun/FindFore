@@ -10,24 +10,29 @@ import (
 	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
+// SearchAvailabilityResult is re-exported for callers in this package.
+type SearchAvailabilityResult = port.SearchAvailabilityResult
+
 // SearchAvailability resolves the course's provider external id, fetches provider
 // slots, upserts tee_times + tee_time_providers, and returns the FindFore cache.
+// On provider failure, returns cached rows when present (source=cache); otherwise
+// propagates the error. Cached availability is never a booking guarantee.
 // When minPlayers > 0, only slots with available_slots >= minPlayers (or unknown
-// available_slots) are returned.
+// available_slots) are returned — best-effort filter only.
 func (s *Service) SearchAvailability(
 	ctx context.Context,
 	courseID int64,
 	from, to time.Time,
 	minPlayers int32,
-) ([]entity.TeeTime, error) {
+) (*SearchAvailabilityResult, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
 	}
 	if courseID == 0 {
 		return nil, ErrCourseNotFound
 	}
-	if !from.Before(to) {
-		return nil, fmtInvalidWindow()
+	if err := validateSearchWindow(from, to, time.Now().UTC()); err != nil {
+		return nil, err
 	}
 
 	link, err := s.courses.GetProviderByCourse(ctx, courseID, s.provider.ProviderName())
@@ -38,12 +43,23 @@ func (s *Service) SearchAvailability(
 		return nil, errf("SearchAvailability", err)
 	}
 
+	now := time.Now().UTC()
 	slots, err := s.provider.SearchAvailability(ctx, link.ExternalID, from, to)
 	if err != nil {
-		return nil, errf("SearchAvailability", err)
+		listed, listErr := s.teeTimes.ListByCourseAndWindow(ctx, courseID, from, to)
+		if listErr != nil {
+			return nil, errf("SearchAvailability", errors.Join(err, listErr))
+		}
+		if len(listed) == 0 {
+			return nil, errf("SearchAvailability", err)
+		}
+		return &SearchAvailabilityResult{
+			TeeTimes:  filterByMinPlayers(listed, minPlayers),
+			Source:    port.AvailabilitySourceCache,
+			FetchedAt: newestSyncedAt(listed, now),
+		}, nil
 	}
 
-	now := time.Now().UTC()
 	provider := s.provider.ProviderName()
 	for _, slot := range slots {
 		if slot.ExternalID == "" {
@@ -58,8 +74,29 @@ func (s *Service) SearchAvailability(
 	if err != nil {
 		return nil, errf("SearchAvailability", err)
 	}
+	return &SearchAvailabilityResult{
+		TeeTimes:  filterByMinPlayers(listed, minPlayers),
+		Source:    port.AvailabilitySourceProvider,
+		FetchedAt: now,
+	}, nil
+}
+
+func validateSearchWindow(from, to, now time.Time) error {
+	if !from.Before(to) {
+		return ErrInvalidWindow
+	}
+	if to.Sub(from) > maxSearchWindow {
+		return ErrInvalidWindow
+	}
+	if to.After(now.Add(maxSearchWindow)) {
+		return ErrInvalidWindow
+	}
+	return nil
+}
+
+func filterByMinPlayers(listed []entity.TeeTime, minPlayers int32) []entity.TeeTime {
 	if minPlayers <= 0 {
-		return listed, nil
+		return listed
 	}
 	out := make([]entity.TeeTime, 0, len(listed))
 	for _, t := range listed {
@@ -67,11 +104,20 @@ func (s *Service) SearchAvailability(
 			out = append(out, t)
 		}
 	}
-	return out, nil
+	return out
 }
 
-func fmtInvalidWindow() error {
-	return errors.New("booking.SearchAvailability: from must be before to")
+func newestSyncedAt(listed []entity.TeeTime, fallback time.Time) time.Time {
+	var best time.Time
+	for _, t := range listed {
+		if t.LastSyncedAt != nil && t.LastSyncedAt.After(best) {
+			best = *t.LastSyncedAt
+		}
+	}
+	if best.IsZero() {
+		return fallback
+	}
+	return best
 }
 
 func (s *Service) upsertSlot(ctx context.Context, courseID int64, provider string, slot port.BookingSlot, syncedAt time.Time) (*entity.TeeTime, error) {

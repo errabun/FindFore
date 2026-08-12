@@ -17,7 +17,7 @@ const getActiveReservationByTeeTimeID = `-- name: GetActiveReservationByTeeTimeI
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
        external_reservation_id, hold_expires_at, failure_reason,
        provider_request_id, quoted_price_cents, quoted_currency,
-       created_at, updated_at
+       client_idempotency_key, created_at, updated_at
 FROM reservations
 WHERE tee_time_id = $1
   AND status IN ('pending', 'held', 'confirmed')
@@ -36,6 +36,7 @@ type GetActiveReservationByTeeTimeIDRow struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -56,6 +57,63 @@ func (q *Queries) GetActiveReservationByTeeTimeID(ctx context.Context, teeTimeID
 		&i.ProviderRequestID,
 		&i.QuotedPriceCents,
 		&i.QuotedCurrency,
+		&i.ClientIdempotencyKey,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getReservationByClientIdempotency = `-- name: GetReservationByClientIdempotency :one
+SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
+       external_reservation_id, hold_expires_at, failure_reason,
+       provider_request_id, quoted_price_cents, quoted_currency,
+       client_idempotency_key, created_at, updated_at
+FROM reservations
+WHERE booked_by_player_id = $1
+  AND client_idempotency_key = $2
+`
+
+type GetReservationByClientIdempotencyParams struct {
+	BookedByPlayerID     int64
+	ClientIdempotencyKey sql.NullString
+}
+
+type GetReservationByClientIdempotencyRow struct {
+	ID                    int64
+	TeeTimeID             int64
+	BookedByPlayerID      int64
+	Status                string
+	PartySize             int32
+	Provider              string
+	ExternalReservationID sql.NullString
+	HoldExpiresAt         sql.NullTime
+	FailureReason         sql.NullString
+	ProviderRequestID     uuid.UUID
+	QuotedPriceCents      sql.NullInt32
+	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (q *Queries) GetReservationByClientIdempotency(ctx context.Context, arg GetReservationByClientIdempotencyParams) (GetReservationByClientIdempotencyRow, error) {
+	row := q.db.QueryRowContext(ctx, getReservationByClientIdempotency, arg.BookedByPlayerID, arg.ClientIdempotencyKey)
+	var i GetReservationByClientIdempotencyRow
+	err := row.Scan(
+		&i.ID,
+		&i.TeeTimeID,
+		&i.BookedByPlayerID,
+		&i.Status,
+		&i.PartySize,
+		&i.Provider,
+		&i.ExternalReservationID,
+		&i.HoldExpiresAt,
+		&i.FailureReason,
+		&i.ProviderRequestID,
+		&i.QuotedPriceCents,
+		&i.QuotedCurrency,
+		&i.ClientIdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -66,7 +124,7 @@ const getReservationByID = `-- name: GetReservationByID :one
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
        external_reservation_id, hold_expires_at, failure_reason,
        provider_request_id, quoted_price_cents, quoted_currency,
-       created_at, updated_at
+       client_idempotency_key, created_at, updated_at
 FROM reservations
 WHERE id = $1
 `
@@ -84,6 +142,7 @@ type GetReservationByIDRow struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -104,6 +163,7 @@ func (q *Queries) GetReservationByID(ctx context.Context, id int64) (GetReservat
 		&i.ProviderRequestID,
 		&i.QuotedPriceCents,
 		&i.QuotedCurrency,
+		&i.ClientIdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -115,13 +175,13 @@ INSERT INTO reservations (
     tee_time_id, booked_by_player_id, status, party_size, provider,
     external_reservation_id, hold_expires_at, failure_reason,
     provider_request_id, quoted_price_cents, quoted_currency,
-    created_at, updated_at
+    client_idempotency_key, created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
           external_reservation_id, hold_expires_at, failure_reason,
           provider_request_id, quoted_price_cents, quoted_currency,
-          created_at, updated_at
+          client_idempotency_key, created_at, updated_at
 `
 
 type InsertReservationParams struct {
@@ -136,6 +196,7 @@ type InsertReservationParams struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 }
 
 type InsertReservationRow struct {
@@ -151,6 +212,7 @@ type InsertReservationRow struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -168,6 +230,7 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		arg.ProviderRequestID,
 		arg.QuotedPriceCents,
 		arg.QuotedCurrency,
+		arg.ClientIdempotencyKey,
 	)
 	var i InsertReservationRow
 	err := row.Scan(
@@ -183,6 +246,7 @@ func (q *Queries) InsertReservation(ctx context.Context, arg InsertReservationPa
 		&i.ProviderRequestID,
 		&i.QuotedPriceCents,
 		&i.QuotedCurrency,
+		&i.ClientIdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -265,7 +329,7 @@ WHERE id = $1
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
           external_reservation_id, hold_expires_at, failure_reason,
           provider_request_id, quoted_price_cents, quoted_currency,
-          created_at, updated_at
+          client_idempotency_key, created_at, updated_at
 `
 
 type UpdateReservationParams struct {
@@ -291,6 +355,7 @@ type UpdateReservationRow struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }
@@ -319,6 +384,7 @@ func (q *Queries) UpdateReservation(ctx context.Context, arg UpdateReservationPa
 		&i.ProviderRequestID,
 		&i.QuotedPriceCents,
 		&i.QuotedCurrency,
+		&i.ClientIdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

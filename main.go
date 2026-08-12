@@ -54,7 +54,7 @@ func main() {
 	teeTimeRepo := postgres.NewTeeTimeRepo(queries)
 	reservationRepo := postgres.NewReservationRepo(queries, db)
 	bookingProvider := lightspeed.NewClient(os.Getenv("LIGHTSPEED_BASE_URL"), os.Getenv("LIGHTSPEED_API_KEY"))
-	bookingSvc := booking.NewService(teeTimeRepo, reservationRepo, courseRepo, bookingProvider)
+	bookingSvc := booking.NewService(teeTimeRepo, reservationRepo, courseRepo, playerRepo, bookingProvider)
 
 	playerSvc := players.NewService(playerRepo, friendshipRepo)
 	sessionSvc := sessions.NewService(playerRepo, friendshipRepo, cfg.JWTSecret)

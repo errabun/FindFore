@@ -7,6 +7,7 @@ type Service struct {
 	teeTimes     port.TeeTimeRepository
 	reservations port.ReservationRepository
 	courses      port.CourseRepository
+	players      port.PlayerRepository
 	provider     port.BookingProvider
 }
 
@@ -14,12 +15,14 @@ func NewService(
 	teeTimes port.TeeTimeRepository,
 	reservations port.ReservationRepository,
 	courses port.CourseRepository,
+	players port.PlayerRepository,
 	provider port.BookingProvider,
 ) *Service {
 	return &Service{
 		teeTimes:     teeTimes,
 		reservations: reservations,
 		courses:      courses,
+		players:      players,
 		provider:     provider,
 	}
 }

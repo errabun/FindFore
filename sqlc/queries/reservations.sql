@@ -2,7 +2,7 @@
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
        external_reservation_id, hold_expires_at, failure_reason,
        provider_request_id, quoted_price_cents, quoted_currency,
-       created_at, updated_at
+       client_idempotency_key, created_at, updated_at
 FROM reservations
 WHERE id = $1;
 
@@ -10,23 +10,32 @@ WHERE id = $1;
 SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
        external_reservation_id, hold_expires_at, failure_reason,
        provider_request_id, quoted_price_cents, quoted_currency,
-       created_at, updated_at
+       client_idempotency_key, created_at, updated_at
 FROM reservations
 WHERE tee_time_id = $1
   AND status IN ('pending', 'held', 'confirmed');
+
+-- name: GetReservationByClientIdempotency :one
+SELECT id, tee_time_id, booked_by_player_id, status, party_size, provider,
+       external_reservation_id, hold_expires_at, failure_reason,
+       provider_request_id, quoted_price_cents, quoted_currency,
+       client_idempotency_key, created_at, updated_at
+FROM reservations
+WHERE booked_by_player_id = $1
+  AND client_idempotency_key = $2;
 
 -- name: InsertReservation :one
 INSERT INTO reservations (
     tee_time_id, booked_by_player_id, status, party_size, provider,
     external_reservation_id, hold_expires_at, failure_reason,
     provider_request_id, quoted_price_cents, quoted_currency,
-    created_at, updated_at
+    client_idempotency_key, created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
           external_reservation_id, hold_expires_at, failure_reason,
           provider_request_id, quoted_price_cents, quoted_currency,
-          created_at, updated_at;
+          client_idempotency_key, created_at, updated_at;
 
 -- name: UpdateReservation :one
 UPDATE reservations
@@ -41,7 +50,7 @@ WHERE id = $1
 RETURNING id, tee_time_id, booked_by_player_id, status, party_size, provider,
           external_reservation_id, hold_expires_at, failure_reason,
           provider_request_id, quoted_price_cents, quoted_currency,
-          created_at, updated_at;
+          client_idempotency_key, created_at, updated_at;
 
 -- name: ListReservationPlayers :many
 SELECT id, reservation_id, player_id, guest_name, created_at, updated_at

@@ -166,9 +166,26 @@ func (f *fakeReservations) GetActiveByTeeTimeID(_ context.Context, teeTimeID int
 	return f.GetByID(context.Background(), id)
 }
 
+func (f *fakeReservations) GetByClientIdempotency(_ context.Context, bookedByPlayerID int64, clientIdempotencyKey string) (*entity.Reservation, error) {
+	for _, r := range f.byID {
+		if r.BookedByPlayerID == bookedByPlayerID && r.ClientIdempotencyKey == clientIdempotencyKey {
+			cp := *r
+			return &cp, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (f *fakeReservations) Create(_ context.Context, r entity.Reservation, players []entity.ReservationPlayer) (*entity.Reservation, error) {
 	if _, ok := f.active[r.TeeTimeID]; ok && entity.IsActiveReservation(r.Status) {
 		return nil, entity.ErrActiveReservationExists
+	}
+	if r.ClientIdempotencyKey != "" {
+		for _, existing := range f.byID {
+			if existing.BookedByPlayerID == r.BookedByPlayerID && existing.ClientIdempotencyKey == r.ClientIdempotencyKey {
+				return nil, entity.ErrActiveReservationExists
+			}
+		}
 	}
 	if r.ProviderRequestID == "" {
 		r.ProviderRequestID = uuid.NewString()
@@ -255,16 +272,43 @@ func seedLinkedTee(t *testing.T, tees *fakeTeeTimes, providerName, externalID st
 	return tt
 }
 
+type fakePlayers struct{}
+
+func (fakePlayers) List(context.Context) ([]entity.Player, error) { return nil, nil }
+func (fakePlayers) GetByID(_ context.Context, id int64) (*entity.Player, error) {
+	if id <= 0 {
+		return nil, sql.ErrNoRows
+	}
+	return &entity.Player{ID: id, Name: "Player"}, nil
+}
+func (fakePlayers) GetByEmail(context.Context, string) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakePlayers) GetByUsername(context.Context, string) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakePlayers) Create(context.Context, entity.Player) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakePlayers) Update(context.Context, entity.Player) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (fakePlayers) GetPasswordByID(context.Context, int64) (string, error) { return "", sql.ErrNoRows }
+func (fakePlayers) UpdatePassword(context.Context, int64, string) error    { return sql.ErrNoRows }
+func (fakePlayers) GetTokenVersion(context.Context, int64) (int32, error)  { return 0, nil }
+func (fakePlayers) ListIDsExcept(context.Context, int64) ([]int64, error)  { return nil, nil }
+
 func beginIn(actor, teeID int64) booking.BeginBookingInput {
 	pid := actor
 	return booking.BeginBookingInput{
 		ActorID: actor, TeeTimeID: teeID,
-		Players: []entity.ReservationPlayer{{PlayerID: &pid, GuestName: "Eric"}},
+		ClientIdempotencyKey: uuid.NewString(),
+		Players:              []entity.ReservationPlayer{{PlayerID: &pid, GuestName: "Eric"}},
 	}
 }
 
 func newSvc(tees *fakeTeeTimes, res *fakeReservations, courses *fakeCourses, provider port.BookingProvider) *booking.Service {
-	return booking.NewService(tees, res, courses, provider)
+	return booking.NewService(tees, res, courses, fakePlayers{}, provider)
 }
 
 func TestSearchAvailabilityResolvesCourseProvider(t *testing.T) {
@@ -285,8 +329,9 @@ func TestSearchAvailabilityResolvesCourseProvider(t *testing.T) {
 
 	got, err := svc.SearchAvailability(context.Background(), 9, from, to, 0)
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.NotNil(t, got[0].LastSyncedAt)
+	require.Equal(t, port.AvailabilitySourceProvider, got.Source)
+	require.Len(t, got.TeeTimes, 1)
+	require.NotNil(t, got.TeeTimes[0].LastSyncedAt)
 }
 
 func TestHappyHoldConfirmCancel(t *testing.T) {

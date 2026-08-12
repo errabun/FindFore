@@ -3,8 +3,15 @@ package booking
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
+)
+
+const (
+	maxPartySize           = 4
+	maxSearchWindow        = 90 * 24 * time.Hour
+	maxClientIdempotencyLen = 128
 )
 
 var (
@@ -12,6 +19,7 @@ var (
 	ErrTeeTimeNotFound        = errors.New("tee time not found")
 	ErrCourseNotFound         = errors.New("course not found")
 	ErrInvalidParty           = errors.New("invalid party size or players")
+	ErrInvalidWindow          = errors.New("invalid search window")
 	ErrProviderLinkMissing    = errors.New("provider link missing for course or tee time")
 	ErrReservationConflict    = errors.New("cannot transition reservation in its current status")
 	ErrProviderOutcomeUnknown = errors.New("provider outcome unknown; retry with same request id")

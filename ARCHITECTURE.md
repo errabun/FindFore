@@ -82,7 +82,7 @@ courses
 - Join/accept capacity uses `SELECT … FOR UPDATE`; `UNIQUE (player_id, event_id)` is the membership safety net.
 - Production migrations must not silently delete user data without an explicit, reviewed data-migration strategy.
 
-See **Booking domain model** below. Schema: `tee_time_providers`, reservation tables, `events.planned_starts_at` (`000009`–`000011`), and hardening fields (`000012`: `provider_request_id`, quoted price, `last_synced_at`).
+See **Booking domain model** below. Schema: `tee_time_providers`, reservation tables, `events.planned_starts_at` (`000009`–`000011`), hardening fields (`000012`: `provider_request_id`, quoted price, `last_synced_at`), and HTTP client idempotency (`000013`: `client_idempotency_key`).
 
 ---
 
@@ -100,7 +100,7 @@ See **Booking domain model** below. Schema: `tee_time_providers`, reservation ta
 | Party booking | `reservations` + `reservation_players`; event ≠ reservation |
 | Tee time status | FindFore **local knowledge** of the slot — not authoritative provider state |
 | Money | Tee time caches display price; reservation stores **quoted** price at begin |
-| Idempotency | FindFore-generated `provider_request_id` persisted before provider call; retries reuse it |
+| Idempotency | Client `Idempotency-Key` → reservation row; FindFore-generated `provider_request_id` persisted before provider call; retries reuse it |
 | HTTP surface | FindFore IDs only (`course_id`, `tee_time_id`, `reservation_id`); never expose provider/external fields |
 | AuthZ | Only `booked_by_player_id` may confirm/cancel; enforced in the booking service |
 
@@ -142,8 +142,10 @@ flowchart TB
 
 1. **`tee_times.status` is FindFore’s local knowledge**, not provider authority. Provider rejection → mark reservation `failed` and refresh cache from the provider; never invent `booked` without confirmation. Provider sync may overwrite cached status/slots.
 2. **Money:** tee time keeps cached `price_cents`/`currency` for display; reservation stores `quoted_price_cents`/`quoted_currency` at begin (what the user agreed to).
-3. **Cache freshness:** `tee_times.last_synced_at` is set on every successful provider search/upsert. UX can distinguish “checked 20s ago” from “checked 2h ago.”
-4. **Idempotency:** FindFore generates and persists `provider_request_id` **before** the provider call. Hold/Confirm send that UUID as `IdempotencyKey`. Cancel uses `{uuid}:cancel` in the adapter request only. External reservation id alone is insufficient (network loss before response). In-flight `pending`/`held` resumes **re-invoke** the provider with the same key. Known failure → `failed` + new row on next attempt. Unknown outcome (timeout) → leave `pending`/`held`, return `ErrProviderOutcomeUnknown`, retry same reservation. If a vendor lacks native idempotency headers, reconciliation stays in the adapter; domain only passes the key.
+3. **Cache freshness:** `tee_times.last_synced_at` is set on every successful provider search/upsert. Search responses include `source` (`provider` \| `cache`) and `fetched_at`. On provider failure, return cached rows when present (`source=cache`); never treat cache as a booking guarantee.
+4. **Idempotency:** Two layers:
+   - **Client:** HTTP `Idempotency-Key` (required on `POST /reservations`) maps to `reservations.client_idempotency_key` with `UNIQUE(booked_by_player_id, key)`. Repeat POSTs return the same reservation and may resume Hold.
+   - **Provider:** FindFore generates and persists `provider_request_id` **before** the provider call. Hold/Confirm send that UUID as `IdempotencyKey`. Cancel uses `{uuid}:cancel` in the adapter request only. Never accept `provider_request_id` from the client. In-flight `pending`/`held` resumes **re-invoke** the provider with the same key. Known failure → `failed` + new row on next attempt. Unknown outcome (timeout) → leave `pending`/`held`, return `ErrProviderOutcomeUnknown`, retry same reservation (same client key). If a vendor lacks native idempotency headers, reconciliation stays in the adapter; domain only passes the key.
 
 ### Entities
 
@@ -153,7 +155,7 @@ flowchart TB
 | `course_providers` | Immutable `(provider, external_id) → course` | Tee sheet |
 | `tee_times` | FindFore slot: `course_id`, `starts_at`, cached holes/capacity/slots/price, `last_synced_at` | Vendor slot id |
 | `tee_time_providers` | Immutable `(provider, external_id) → tee_time` | Social invites |
-| `reservations` | Party booking lifecycle, `provider_request_id`, quoted price | Feed / friends |
+| `reservations` | Party booking lifecycle, `client_idempotency_key`, `provider_request_id`, quoted price | Feed / friends |
 | `reservation_players` | Party members (`player_id` and/or `guest_name`; both allowed — name for provider, id for FindFore) | Provider payload |
 | `events` | Social round: `planned_starts_at`, optional `tee_time_id` | Inventory / payment |
 
@@ -167,7 +169,7 @@ flowchart TB
 
 - `tee_times` — cached `capacity`, `available_slots`, `price_cents`, `currency`, `last_synced_at`; status `available \| held \| booked \| cancelled` (local knowledge).
 - `tee_time_providers` — `UNIQUE(provider, external_id)`, immutable reassignment (same as `course_providers`).
-- `reservations` — `provider_request_id` + `UNIQUE(provider, provider_request_id)`; `quoted_price_cents` / `quoted_currency`; partial unique on active statuses per tee time.
+- `reservations` — `client_idempotency_key` + partial unique `(booked_by_player_id, key)` (`000013`); `provider_request_id` + `UNIQUE(provider, provider_request_id)`; `quoted_price_cents` / `quoted_currency`; partial unique on active statuses per tee time.
 - `reservation_players` — at least one of `player_id` / non-empty `guest_name` (`000010`).
 - `events.planned_starts_at` — display play time = linked `tee_times.starts_at` if present, else planned.
 
@@ -202,12 +204,12 @@ Authenticated (`/api/v1`):
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/courses/{courseID}/tee-times?from=&to=&players=` | Provider search + cache upsert; filter by `players` |
-| `POST` | `/reservations` | Body: `tee_time_id`, `players`; server owns `provider_request_id` |
+| `GET` | `/courses/{courseID}/tee-times?from=&to=&players=` | Begin search attempt: provider fetch + cache upsert when possible. Response includes `tee_times`, `source` (`provider`\|`cache`), `fetched_at`. `?players=N` is a **best-effort** filter on cached/provider `available_slots >= N` — not a hold. Windows: `from < to`, max 90 days long, `to` ≤ 90 days ahead. Cached rows are never a booking guarantee. |
+| `POST` | `/reservations` | **Begin a booking attempt** (may land `pending`/`held`/`confirmed` depending on provider) — not “tee time is confirmed.” Requires `Idempotency-Key` header. Body: `tee_time_id`, `players` (1–4). Server owns `provider_request_id`. Body size capped (~16 KiB). |
 | `POST` | `/reservations/{id}/confirm` | Idempotent if already confirmed |
 | `POST` | `/reservations/{id}/cancel` | Idempotent if already cancelled |
 
-Unknown provider outcome → `503` + `provider_outcome_unknown`. Provider reject / conflicts → `409`. Not owner → `403`.
+Unknown provider outcome → `503` + `provider_outcome_unknown` (retry same `Idempotency-Key`). Provider reject / conflicts → `409`. Not owner → `403`. Missing/invalid `Idempotency-Key` or party → `400`. Oversized body → `413`.
 
 ### Twelve scenario walkthroughs
 

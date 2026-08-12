@@ -29,6 +29,9 @@ type Provider struct {
 
 	Slots []port.BookingSlot
 
+	// SearchErr, when set, makes SearchAvailability return that error.
+	SearchErr error
+
 	HoldBehavior    Behavior
 	ConfirmBehavior Behavior
 	CancelBehavior  Behavior
@@ -72,6 +75,9 @@ func (p *Provider) ProviderName() string {
 func (p *Provider) SearchAvailability(context.Context, string, time.Time, time.Time) ([]port.BookingSlot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.SearchErr != nil {
+		return nil, p.SearchErr
+	}
 	out := make([]port.BookingSlot, len(p.Slots))
 	copy(out, p.Slots)
 	return out, nil

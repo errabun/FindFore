@@ -29,6 +29,7 @@ type Reservation struct {
 	ProviderRequestID     string // FindFore-generated UUID; persisted before provider calls
 	QuotedPriceCents      *int32
 	QuotedCurrency        string
+	ClientIdempotencyKey  string // Client Idempotency-Key; UNIQUE(booked_by, key) when set
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 }

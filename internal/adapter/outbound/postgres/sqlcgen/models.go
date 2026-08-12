@@ -121,6 +121,7 @@ type Reservation struct {
 	ProviderRequestID     uuid.UUID
 	QuotedPriceCents      sql.NullInt32
 	QuotedCurrency        sql.NullString
+	ClientIdempotencyKey  sql.NullString
 }
 
 type ReservationPlayer struct {

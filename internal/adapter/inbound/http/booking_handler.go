@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +17,9 @@ import (
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
+
+const maxReservationBodyBytes = 16 << 10 // 16 KiB
+const maxIdempotencyKeyLen = 128
 
 type teeTimeResponse struct {
 	ID             int64   `json:"id"`
@@ -138,16 +143,20 @@ func (h *Handler) ListCourseTeeTimes(w http.ResponseWriter, r *http.Request) {
 		minPlayers = int32(n)
 	}
 
-	tees, err := h.booking.SearchAvailability(r.Context(), courseID, from, to, minPlayers)
+	result, err := h.booking.SearchAvailability(r.Context(), courseID, from, to, minPlayers)
 	if err != nil {
 		writeBookingError(w, r, err)
 		return
 	}
-	items := make([]teeTimeResponse, len(tees))
-	for i, t := range tees {
+	items := make([]teeTimeResponse, len(result.TeeTimes))
+	for i, t := range result.TeeTimes {
 		items[i] = mapTeeTime(t)
 	}
-	respondJSON(w, http.StatusOK, map[string]any{"tee_times": items})
+	respondJSON(w, http.StatusOK, map[string]any{
+		"tee_times":  items,
+		"source":     result.Source,
+		"fetched_at": result.FetchedAt.UTC().Format(time.RFC3339),
+	})
 }
 
 func (h *Handler) CreateReservation(w http.ResponseWriter, r *http.Request) {
@@ -160,8 +169,26 @@ func (h *Handler) CreateReservation(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
+
+	idemKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idemKey == "" || len(idemKey) > maxIdempotencyKeyLen {
+		respondError(w, http.StatusBadRequest, "validation_error", "Idempotency-Key header is required")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxReservationBodyBytes)
 	var req beginReservationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) || errors.Is(err, io.ErrUnexpectedEOF) {
+			respondError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Request body too large")
+			return
+		}
+		// MaxBytesReader wraps as errors with "http: request body too large"
+		if strings.Contains(err.Error(), "request body too large") {
+			respondError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Request body too large")
+			return
+		}
 		respondError(w, http.StatusBadRequest, "validation_error", "Invalid JSON body")
 		return
 	}
@@ -171,15 +198,14 @@ func (h *Handler) CreateReservation(w http.ResponseWriter, r *http.Request) {
 	}
 	players := make([]entity.ReservationPlayer, 0, len(req.Players))
 	for _, p := range req.Players {
-		if p.PlayerID == nil && p.GuestName == "" {
-			respondError(w, http.StatusBadRequest, "validation_error", "each player needs player_id or guest_name")
-			return
-		}
 		players = append(players, entity.ReservationPlayer{PlayerID: p.PlayerID, GuestName: p.GuestName})
 	}
 
 	out, err := h.booking.BeginBooking(r.Context(), port.BeginBookingInput{
-		ActorID: actorID, TeeTimeID: req.TeeTimeID, Players: players,
+		ActorID:              actorID,
+		TeeTimeID:            req.TeeTimeID,
+		Players:              players,
+		ClientIdempotencyKey: idemKey,
 	})
 	if err != nil {
 		writeBookingError(w, r, err)
@@ -223,6 +249,9 @@ func (h *Handler) mutateReservation(
 		respondError(w, http.StatusBadRequest, "validation_error", "Invalid reservation id")
 		return
 	}
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxReservationBodyBytes)
+	}
 	res, err := fn(r.Context(), actorID, id)
 	if err != nil {
 		writeBookingError(w, r, err)
@@ -245,7 +274,9 @@ func writeBookingError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, entity.ErrInvalidReservationTransition),
 		errors.Is(err, booking.ErrReservationConflict):
 		respondError(w, http.StatusConflict, "conflict", "Reservation conflict")
-	case errors.Is(err, booking.ErrInvalidParty), errors.Is(err, booking.ErrProviderLinkMissing):
+	case errors.Is(err, booking.ErrInvalidParty),
+		errors.Is(err, booking.ErrInvalidWindow),
+		errors.Is(err, booking.ErrProviderLinkMissing):
 		respondError(w, http.StatusBadRequest, "validation_error", "Invalid booking request")
 	case errors.Is(err, booking.ErrProviderRequired):
 		respondError(w, http.StatusNotImplemented, "not_implemented", "Booking provider is not configured")

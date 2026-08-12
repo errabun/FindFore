@@ -32,6 +32,7 @@ func mapReservationRow(
 	providerRequestID uuid.UUID,
 	quotedPrice sql.NullInt32,
 	quotedCurrency sql.NullString,
+	clientIdempotency sql.NullString,
 	createdAt, updatedAt time.Time,
 ) entity.Reservation {
 	var hold *time.Time
@@ -52,6 +53,7 @@ func mapReservationRow(
 		ProviderRequestID:     providerRequestID.String(),
 		QuotedPriceCents:      int32Ptr(quotedPrice),
 		QuotedCurrency:        quotedCurrency.String,
+		ClientIdempotencyKey:  clientIdempotency.String,
 		CreatedAt:             createdAt,
 		UpdatedAt:             updatedAt,
 	}
@@ -79,7 +81,7 @@ func (r *ReservationRepo) GetByID(ctx context.Context, id int64) (*entity.Reserv
 	out := mapReservationRow(
 		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
 		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
-		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+		row.QuotedPriceCents, row.QuotedCurrency, row.ClientIdempotencyKey, row.CreatedAt, row.UpdatedAt,
 	)
 	return &out, nil
 }
@@ -92,7 +94,23 @@ func (r *ReservationRepo) GetActiveByTeeTimeID(ctx context.Context, teeTimeID in
 	out := mapReservationRow(
 		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
 		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
-		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+		row.QuotedPriceCents, row.QuotedCurrency, row.ClientIdempotencyKey, row.CreatedAt, row.UpdatedAt,
+	)
+	return &out, nil
+}
+
+func (r *ReservationRepo) GetByClientIdempotency(ctx context.Context, bookedByPlayerID int64, clientIdempotencyKey string) (*entity.Reservation, error) {
+	row, err := r.q.GetReservationByClientIdempotency(ctx, sqlcgen.GetReservationByClientIdempotencyParams{
+		BookedByPlayerID:     bookedByPlayerID,
+		ClientIdempotencyKey: sql.NullString{String: clientIdempotencyKey, Valid: clientIdempotencyKey != ""},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := mapReservationRow(
+		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
+		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
+		row.QuotedPriceCents, row.QuotedCurrency, row.ClientIdempotencyKey, row.CreatedAt, row.UpdatedAt,
 	)
 	return &out, nil
 }
@@ -131,6 +149,7 @@ func (r *ReservationRepo) Create(ctx context.Context, res entity.Reservation, pl
 		ProviderRequestID:     reqID,
 		QuotedPriceCents:      nullInt32Ptr(res.QuotedPriceCents),
 		QuotedCurrency:        sql.NullString{String: res.QuotedCurrency, Valid: res.QuotedCurrency != ""},
+		ClientIdempotencyKey:  sql.NullString{String: res.ClientIdempotencyKey, Valid: res.ClientIdempotencyKey != ""},
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -160,7 +179,7 @@ func (r *ReservationRepo) Create(ctx context.Context, res entity.Reservation, pl
 	out := mapReservationRow(
 		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
 		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
-		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+		row.QuotedPriceCents, row.QuotedCurrency, row.ClientIdempotencyKey, row.CreatedAt, row.UpdatedAt,
 	)
 	return &out, nil
 }
@@ -188,7 +207,7 @@ func (r *ReservationRepo) Update(ctx context.Context, res entity.Reservation) (*
 	out := mapReservationRow(
 		row.ID, row.TeeTimeID, row.BookedByPlayerID, row.Status, row.PartySize, row.Provider,
 		row.ExternalReservationID, row.HoldExpiresAt, row.FailureReason, row.ProviderRequestID,
-		row.QuotedPriceCents, row.QuotedCurrency, row.CreatedAt, row.UpdatedAt,
+		row.QuotedPriceCents, row.QuotedCurrency, row.ClientIdempotencyKey, row.CreatedAt, row.UpdatedAt,
 	)
 	return &out, nil
 }

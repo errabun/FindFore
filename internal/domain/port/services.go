@@ -64,9 +64,10 @@ type GolfCourseSearcher interface {
 
 // BeginBookingInput is the FindFore-ID-only input for starting a reservation.
 type BeginBookingInput struct {
-	ActorID   int64
-	TeeTimeID int64
-	Players   []entity.ReservationPlayer
+	ActorID              int64
+	TeeTimeID            int64
+	Players              []entity.ReservationPlayer
+	ClientIdempotencyKey string // Required; HTTP Idempotency-Key (not provider_request_id)
 }
 
 // BeginBookingResult reports the reservation and whether a new row was created.
@@ -75,9 +76,23 @@ type BeginBookingResult struct {
 	Created     bool
 }
 
+// AvailabilitySource identifies where SearchAvailabilityResult.TeeTimes came from.
+const (
+	AvailabilitySourceProvider = "provider"
+	AvailabilitySourceCache    = "cache"
+)
+
+// SearchAvailabilityResult is a best-effort tee-time list with freshness metadata.
+// Cached rows are never a booking guarantee; ?players= is a filter on available_slots only.
+type SearchAvailabilityResult struct {
+	TeeTimes  []entity.TeeTime
+	Source    string    // AvailabilitySourceProvider | AvailabilitySourceCache
+	FetchedAt time.Time // UTC; provider success = now; cache fallback = newest LastSyncedAt when known
+}
+
 // BookingService is the provider-agnostic booking application API (HTTP boundary).
 type BookingService interface {
-	SearchAvailability(ctx context.Context, courseID int64, from, to time.Time, minPlayers int32) ([]entity.TeeTime, error)
+	SearchAvailability(ctx context.Context, courseID int64, from, to time.Time, minPlayers int32) (*SearchAvailabilityResult, error)
 	BeginBooking(ctx context.Context, in BeginBookingInput) (*BeginBookingResult, error)
 	ConfirmBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error)
 	CancelBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error)

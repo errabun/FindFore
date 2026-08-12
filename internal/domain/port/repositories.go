@@ -68,6 +68,7 @@ type TeeTimeRepository interface {
 type ReservationRepository interface {
 	GetByID(ctx context.Context, id int64) (*entity.Reservation, error)
 	GetActiveByTeeTimeID(ctx context.Context, teeTimeID int64) (*entity.Reservation, error)
+	GetByClientIdempotency(ctx context.Context, bookedByPlayerID int64, clientIdempotencyKey string) (*entity.Reservation, error)
 	Create(ctx context.Context, r entity.Reservation, players []entity.ReservationPlayer) (*entity.Reservation, error)
 	Update(ctx context.Context, r entity.Reservation) (*entity.Reservation, error)
 	ListPlayers(ctx context.Context, reservationID int64) ([]entity.ReservationPlayer, error)

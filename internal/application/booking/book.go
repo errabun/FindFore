@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
@@ -20,8 +21,8 @@ type BeginBookingInput = port.BeginBookingInput
 type BeginBookingResult = port.BeginBookingResult
 
 // BeginBooking creates a pending reservation with a FindFore-owned provider_request_id,
-// then asks the provider to hold. In-flight pending/held reservations for the same
-// booker resume by re-invoking Hold with the stored key.
+// then asks the provider to hold. Client Idempotency-Key resumes an existing attempt;
+// in-flight pending/held for the same booker also resume Hold with the stored key.
 func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*BeginBookingResult, error) {
 	if s.provider == nil {
 		return nil, ErrProviderRequired
@@ -29,14 +30,34 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*Begi
 	if in.ActorID == 0 || in.TeeTimeID == 0 {
 		return nil, ErrInvalidParty
 	}
-	partySize := int32(len(in.Players))
-	if partySize <= 0 {
+	key := strings.TrimSpace(in.ClientIdempotencyKey)
+	if key == "" || len(key) > maxClientIdempotencyLen {
 		return nil, ErrInvalidParty
 	}
-	for _, p := range in.Players {
-		if p.PlayerID == nil && p.GuestName == "" {
-			return nil, ErrInvalidParty
+	in.ClientIdempotencyKey = key
+
+	players, err := s.normalizeAndValidateParty(ctx, in.Players)
+	if err != nil {
+		return nil, err
+	}
+	in.Players = players
+	partySize := int32(len(players))
+
+	if existing, err := s.reservations.GetByClientIdempotency(ctx, in.ActorID, key); err == nil {
+		if existing.Status == entity.ReservationStatusPending || existing.Status == entity.ReservationStatusHeld {
+			externalID, linkErr := s.resolveTeeTimeExternalID(ctx, existing.TeeTimeID)
+			if linkErr != nil {
+				return nil, errf("BeginBooking", linkErr)
+			}
+			res, holdErr := s.applyHold(ctx, existing, externalID, nil)
+			if holdErr != nil {
+				return &BeginBookingResult{Reservation: res, Created: false}, holdErr
+			}
+			return &BeginBookingResult{Reservation: res, Created: false}, nil
 		}
+		return &BeginBookingResult{Reservation: existing, Created: false}, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, errf("BeginBooking", err)
 	}
 
 	teeTime, err := s.teeTimes.GetByID(ctx, in.TeeTimeID)
@@ -48,6 +69,9 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*Begi
 	}
 	if teeTime.Status == entity.TeeTimeStatusCancelled || teeTime.Status == entity.TeeTimeStatusBooked {
 		return nil, fmt.Errorf("%w: tee time status %s", ErrReservationConflict, teeTime.Status)
+	}
+	if teeTime.AvailableSlots != nil && partySize > *teeTime.AvailableSlots {
+		return nil, fmt.Errorf("%w: party exceeds available slots", ErrReservationConflict)
 	}
 
 	externalID, err := s.resolveTeeTimeExternalID(ctx, in.TeeTimeID)
@@ -70,14 +94,15 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*Begi
 	}
 
 	res, err := s.reservations.Create(ctx, entity.Reservation{
-		TeeTimeID:         in.TeeTimeID,
-		BookedByPlayerID:  in.ActorID,
-		Status:            entity.ReservationStatusPending,
-		PartySize:         partySize,
-		Provider:          s.provider.ProviderName(),
-		ProviderRequestID: uuid.NewString(),
-		QuotedPriceCents:  teeTime.PriceCents,
-		QuotedCurrency:    teeTime.Currency,
+		TeeTimeID:            in.TeeTimeID,
+		BookedByPlayerID:     in.ActorID,
+		Status:               entity.ReservationStatusPending,
+		PartySize:            partySize,
+		Provider:             s.provider.ProviderName(),
+		ProviderRequestID:    uuid.NewString(),
+		QuotedPriceCents:     teeTime.PriceCents,
+		QuotedCurrency:       teeTime.Currency,
+		ClientIdempotencyKey: key,
 	}, in.Players)
 	if err != nil {
 		return nil, errf("BeginBooking", err)
@@ -88,6 +113,33 @@ func (s *Service) BeginBooking(ctx context.Context, in BeginBookingInput) (*Begi
 		return &BeginBookingResult{Reservation: held, Created: true}, holdErr
 	}
 	return &BeginBookingResult{Reservation: held, Created: true}, nil
+}
+
+func (s *Service) normalizeAndValidateParty(ctx context.Context, in []entity.ReservationPlayer) ([]entity.ReservationPlayer, error) {
+	n := len(in)
+	if n < 1 || n > maxPartySize {
+		return nil, ErrInvalidParty
+	}
+	out := make([]entity.ReservationPlayer, 0, n)
+	for _, p := range in {
+		name := strings.TrimSpace(p.GuestName)
+		if p.PlayerID == nil && name == "" {
+			return nil, ErrInvalidParty
+		}
+		if p.PlayerID != nil {
+			if s.players == nil {
+				return nil, ErrInvalidParty
+			}
+			if _, err := s.players.GetByID(ctx, *p.PlayerID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrInvalidParty
+				}
+				return nil, errf("BeginBooking", err)
+			}
+		}
+		out = append(out, entity.ReservationPlayer{PlayerID: p.PlayerID, GuestName: name})
+	}
+	return out, nil
 }
 
 func (s *Service) resolveTeeTimeExternalID(ctx context.Context, teeTimeID int64) (string, error) {
@@ -140,8 +192,10 @@ func (s *Service) applyHold(ctx context.Context, res *entity.Reservation, extern
 		next = entity.ReservationStatusConfirmed
 		teeStatus = entity.TeeTimeStatusBooked
 	}
-	if setErr := setReservationStatus(res, next); setErr != nil {
-		return nil, errf("BeginBooking", setErr)
+	if res.Status != next {
+		if setErr := setReservationStatus(res, next); setErr != nil {
+			return nil, errf("BeginBooking", setErr)
+		}
 	}
 	if _, err := s.teeTimes.UpdateStatus(ctx, res.TeeTimeID, teeStatus); err != nil {
 		return nil, errf("BeginBooking", err)
