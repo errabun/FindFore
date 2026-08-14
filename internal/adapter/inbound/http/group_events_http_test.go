@@ -16,9 +16,10 @@ import (
 )
 
 type httpFakeEvents struct {
-	byID    map[int64]*entity.Event
-	details map[int64]*entity.EventWithDetails
-	nextID  int64
+	byID     map[int64]*entity.Event
+	details  map[int64]*entity.EventWithDetails
+	nextID   int64
+	accepted map[int64][]int64
 }
 
 func newHTTPFakeEvents() *httpFakeEvents {
@@ -78,6 +79,9 @@ func (f *httpFakeEvents) CreateWithInvites(_ context.Context, e entity.Event, _ 
 		ID: e.ID, CourseName: "Test Course", CourseTimezone: entity.DefaultCourseTimezone,
 		PlannedStartsAt: e.PlannedStartsAt, GroupID: e.GroupID, OpenSpots: e.OpenSpots,
 		NumberOfHoles: e.NumberOfHoles, Private: e.Private, HostID: e.HostID, HostName: "Host",
+	}
+	if f.accepted != nil {
+		f.accepted[e.ID] = []int64{int64(e.HostID)}
 	}
 	return e.ID, nil
 }
@@ -143,22 +147,35 @@ func (httpFakeEventCourses) GetProviderByCourse(context.Context, int64, string) 
 }
 func (httpFakeEventCourses) LinkProvider(context.Context, int64, string, string) error { return nil }
 
-func newGroupEventsHTTPEnv(t *testing.T) *groupsHTTPEnv {
+type recordingGroupPosts struct {
+	stubPosts
+	bodies []string
+}
+
+func (r *recordingGroupPosts) CreateForGroup(_ context.Context, _, groupID int64, body string) (*entity.PostWithDetails, error) {
+	r.bodies = append(r.bodies, body)
+	gid := groupID
+	return &entity.PostWithDetails{Body: body, GroupID: &gid}, nil
+}
+
+func newGroupEventsHTTPEnv(t *testing.T) (*groupsHTTPEnv, *recordingGroupPosts) {
 	t.Helper()
 	repo := newHTTPFakeGroups()
-	eventRepo := newHTTPFakeEvents()
 	playerEvents := newHTTPFakePlayerEvents()
+	eventRepo := newHTTPFakeEvents()
+	eventRepo.accepted = playerEvents.accepted
+	posts := &recordingGroupPosts{}
 	groupSvc := groups.NewService(repo, httpFakePlayers{})
 	eventSvc := events.NewService(eventRepo, playerEvents, httpFakeEventCourses{}, repo)
-	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, eventSvc, stubPlayerEvents{}, stubFriendships{}, stubPosts{}, nil, groupSvc)
+	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, eventSvc, stubPlayerEvents{}, stubFriendships{}, posts, nil, groupSvc)
 	return &groupsHTTPEnv{
 		router: httphandler.NewRouter(h, testJWTSecret, stubTokenVersions{versions: map[int64]int32{1: 0, 2: 0, 3: 0}}),
 		repo:   repo,
-	}
+	}, posts
 }
 
 func TestGroupEventsHTTPMemberCreateAndList(t *testing.T) {
-	e := newGroupEventsHTTPEnv(t)
+	e, posts := newGroupEventsHTTPEnv(t)
 	rec := e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	e.do(t, http.MethodPost, "/api/v1/groups/1/join", "", 2)
@@ -174,6 +191,9 @@ func TestGroupEventsHTTPMemberCreateAndList(t *testing.T) {
 	require.True(t, created.Private)
 	require.NotNil(t, created.GroupID)
 	require.Equal(t, int64(1), *created.GroupID)
+	require.Len(t, posts.bodies, 1)
+	require.Contains(t, posts.bodies[0], "Test Course")
+	require.Contains(t, posts.bodies[0], "spots open")
 
 	rec = e.do(t, http.MethodGet, "/api/v1/groups/1/events", "", 2)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -188,7 +208,7 @@ func TestGroupEventsHTTPMemberCreateAndList(t *testing.T) {
 }
 
 func TestGroupEventsHTTPNonMemberHidden(t *testing.T) {
-	e := newGroupEventsHTTPEnv(t)
+	e, _ := newGroupEventsHTTPEnv(t)
 	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
 
 	body := `{"course_id":1,"date":"2099-01-01","tee_time":"08:00","open_spots":4,"number_of_holes":"18","group_id":1}`
@@ -199,4 +219,36 @@ func TestGroupEventsHTTPNonMemberHidden(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code)
 	rec = e.do(t, http.MethodPost, "/api/v1/event", body, 2)
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGroupEventsHTTPJoinableNeedOneMore(t *testing.T) {
+	e, _ := newGroupEventsHTTPEnv(t)
+	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
+	e.do(t, http.MethodPost, "/api/v1/groups/1/join", "", 2)
+
+	body := `{"course_id":1,"date":"2099-01-01","tee_time":"08:00","open_spots":4,"number_of_holes":"18","group_id":1}`
+	rec := e.do(t, http.MethodPost, "/api/v1/event", body, 1)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	rec = e.do(t, http.MethodGet, "/api/v1/events/from-groups", "", 2)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var listed struct {
+		Events []struct {
+			CourseName string `json:"course_name"`
+			GroupName  string `json:"group_name"`
+		} `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	require.Len(t, listed.Events, 1)
+	require.Equal(t, "Crew", listed.Events[0].GroupName)
+
+	rec = e.do(t, http.MethodGet, "/api/v1/events/from-groups", "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	require.Empty(t, listed.Events)
+
+	rec = e.do(t, http.MethodGet, "/api/v1/events/from-groups", "", 3)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	require.Empty(t, listed.Events)
 }

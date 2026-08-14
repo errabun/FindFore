@@ -11,6 +11,11 @@ export const teeTimeAdapter: TeeTimePort = {
     return request<Event[]>(`${endpoints.players}/${playerId}/friends-events`);
   },
 
+  async getGroupJoinableEvents(): Promise<Event[]> {
+    const body = await request<{ events: Event[] }>(`${endpoints.events}/from-groups`);
+    return body.events ?? [];
+  },
+
   createEvent(
     courseId: string,
     date: string,

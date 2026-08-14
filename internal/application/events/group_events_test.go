@@ -61,8 +61,16 @@ func (f *fakeEventGroups) TransferOwnership(context.Context, int64, int64, int64
 func (f *fakeEventGroups) ListPublic(context.Context, string, int32, int32) ([]entity.Group, error) {
 	return nil, nil
 }
-func (f *fakeEventGroups) ListByPlayer(context.Context, int64, int32, int32) ([]entity.Group, error) {
-	return nil, nil
+func (f *fakeEventGroups) ListByPlayer(_ context.Context, playerID int64, _, _ int32) ([]entity.Group, error) {
+	var out []entity.Group
+	for _, m := range f.memberships {
+		if m.PlayerID == playerID && m.IsActive() {
+			if g, ok := f.groups[m.GroupID]; ok {
+				out = append(out, *g)
+			}
+		}
+	}
+	return out, nil
 }
 func (f *fakeEventGroups) CountActiveMembers(context.Context, int64) (int64, error) { return 0, nil }
 func (f *fakeEventGroups) ListActiveMembers(context.Context, int64, int32, int32) ([]port.GroupMemberRow, error) {
@@ -171,4 +179,48 @@ func TestGroupEventListAndGetVisibility(t *testing.T) {
 	public, err := svc.List(ctx, 4, nil, true)
 	require.NoError(t, err)
 	require.Empty(t, public)
+}
+
+func TestJoinableGroupRoundsNeedOneMore(t *testing.T) {
+	eventRepo, playerEvents, _, svc := seededGroupEvents()
+	gid := int64(1)
+	starts := futureStarts()
+	eventRepo.byID[20] = &entity.Event{ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4, PlannedStartsAt: starts}
+	eventRepo.details[20] = &entity.EventWithDetails{
+		ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4,
+		PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone, CourseName: "Test Course",
+	}
+	playerEvents.byStatus[20] = map[entity.InviteStatus][]int64{
+		entity.InviteStatusAccepted: {1},
+	}
+
+	fullID := int64(21)
+	eventRepo.byID[fullID] = &entity.Event{ID: fullID, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 1, PlannedStartsAt: starts}
+	eventRepo.details[fullID] = &entity.EventWithDetails{
+		ID: fullID, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 1,
+		PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
+	}
+	playerEvents.byStatus[fullID] = map[entity.InviteStatus][]int64{
+		entity.InviteStatusAccepted: {1},
+	}
+
+	ctx := context.Background()
+
+	listed, err := svc.ListJoinableFromGroups(ctx, 2)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.Equal(t, int64(20), listed[0].ID)
+	require.Equal(t, "Crew", listed[0].GroupName)
+
+	hostListed, err := svc.ListJoinableFromGroups(ctx, 1)
+	require.NoError(t, err)
+	require.Empty(t, hostListed)
+
+	pendingListed, err := svc.ListJoinableFromGroups(ctx, 3)
+	require.NoError(t, err)
+	require.Empty(t, pendingListed)
+
+	strangerListed, err := svc.ListJoinableFromGroups(ctx, 4)
+	require.NoError(t, err)
+	require.Empty(t, strangerListed)
 }

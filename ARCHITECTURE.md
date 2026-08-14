@@ -1,6 +1,6 @@
 # FindFore — Architecture
 
-**Last Updated:** August 12, 2026  
+**Last Updated:** August 14, 2026  
 **Status:** Living document — system shape, boundaries, and diagrams.
 
 > **Product direction:** [`VISION.md`](./VISION.md)  
@@ -88,7 +88,7 @@ See **Booking domain model** below. Schema: `tee_time_providers`, reservation ta
 
 ## Booking domain model
 
-**Status:** HTTP booking API shipped (provider-agnostic; fake-provider HTTP tests green). Live Lightspeed mapping remains deferred — review HTTP layer before wiring.
+**Status:** HTTP booking API shipped (provider-agnostic; fake-provider HTTP tests green). **Live partner adapters (Lightspeed / GolfNow / ForeUP) and booking UX are deferred** until API access lands. Do not implement a live client or checkout UI in the meantime.
 
 **Locked decisions**
 
@@ -236,10 +236,11 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 | `GET` | `/groups/{id}/posts` | Active members only; 404 otherwise |
 | `POST` | `/groups/{id}/posts` | Active members; `{body}` |
 | `GET` | `/groups/{id}/events` | Upcoming group rounds; active members only; 404 otherwise |
+| `GET` | `/events/from-groups` | Joinable group rounds for the actor (need-one-more); empty list if none |
 | `GET` | `/group-invitations` | Outstanding invites for the actor |
 | `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |
 
-Schema: `000014` (`groups`, `group_memberships`, `group_invitations`), `000015` (`posts.group_id`), and `000016` (`events.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`. Group rounds reuse events (`private` forced on create); they do not appear on the public tee-time feed. Deleting a group sets `events.group_id` to NULL so the host's round remains.
+Schema: `000014` (`groups`, `group_memberships`, `group_invitations`), `000015` (`posts.group_id`), and `000016` (`events.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`. Group rounds reuse events (`private` forced on create); they do not appear on the public tee-time feed. Creating a group round also posts to group activity. Members who have not joined yet see open rounds on the dashboard (`GET /events/from-groups`). Deleting a group sets `events.group_id` to NULL so the host's round remains.
 
 ### Twelve scenario walkthroughs
 
@@ -281,9 +282,10 @@ Highest-risk flows: **4–8** (hold, fail, retry, idempotency).
 
 1. ~~Fake provider + service failure-matrix tests~~
 2. ~~HTTP booking routes + HTTP/fake integration tests~~
-3. Lightspeed live HTTP client (credentials + DTO mapping) — stub exists at `internal/adapter/outbound/lightspeed` (**next gate — after HTTP review**)
-4. ForeUP adapter (later)
+3. Live partner HTTP client (Lightspeed / GolfNow / ForeUP) — **deferred until provider API access**
+4. ForeUP adapter (later, after first live partner)
 5. Resolve open items (hold TTL, webhook vs poll, stale-cache UX)
+6. Booking UX and linking group rounds to reservations (after a live adapter exists)
 
 ## Social → Identity Loop
 

@@ -1,6 +1,6 @@
 # FindFore — North Star Vision
 
-**Last Updated:** August 07, 2026  
+**Last Updated:** August 14, 2026  
 **Status:** Living document — the strategic reference for all product and architectural decisions.
 
 ---
@@ -206,8 +206,8 @@ Build toward the full vision from day one — architectural decisions should not
 | Course search | ✅ Built (Golf Course API integration) |
 | Tee time creation & coordination | ✅ Built (private/public, invite, accept/decline/join) |
 | Community feed | ✅ Built (posts, reactions, replies) |
-| Golf groups | ✅ Built (membership + activity + group rounds) |
-| Tee time booking via provider | 🔲 Waiting on provider API access |
+| Golf groups | ✅ Built (membership + activity + group rounds + need-one-more) |
+| Tee time booking via provider | 🔲 Deferred — waiting on partner API access; do not build live adapter or booking UX yet |
 | Group chat | 🔲 Not started |
 | Notifications | 🔲 Not started |
 | Google Identity auth | 🔲 Not started |

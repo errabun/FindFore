@@ -14,4 +14,5 @@ export interface Event {
   closed: number[];
   remaining_spots: number;
   group_id?: number;
+  group_name?: string;
 }

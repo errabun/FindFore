@@ -35,4 +35,5 @@ type EventWithDetails struct {
 	Pending         []int64
 	Closed          []int64
 	RemainingSpots  int32
+	GroupName       string
 }

@@ -3,6 +3,7 @@ import type { Event } from '../domain/teeTime/types';
 export interface TeeTimePort {
   getEvents(playerId: number): Promise<Event[]>;
   getFriendsEvents(playerId: number): Promise<Event[]>;
+  getGroupJoinableEvents(): Promise<Event[]>;
   createEvent(
     courseId: string,
     date: string,

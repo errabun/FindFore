@@ -51,6 +51,7 @@ func NewRouter(h *Handler, jwtSecret string, tokenVersions mw.TokenVersionLookup
 			r.Get("/players/{player_id}/friends-events", h.ListFriendsEvents)
 
 			r.Get("/events", h.ListEvents)
+			r.Get("/events/from-groups", h.ListJoinableGroupEvents)
 			r.Get("/event/{id}", h.GetEvent)
 			r.Post("/event", h.CreateEvent)
 			r.Patch("/event/{id}", h.UpdateEvent)

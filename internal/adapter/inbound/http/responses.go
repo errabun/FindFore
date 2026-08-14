@@ -39,6 +39,7 @@ type EventResponse struct {
 	Closed         []int64 `json:"closed"`
 	RemainingSpots int32   `json:"remaining_spots"`
 	GroupID        *int64  `json:"group_id,omitempty"`
+	GroupName      string  `json:"group_name,omitempty"`
 }
 
 type PlayerResponse struct {

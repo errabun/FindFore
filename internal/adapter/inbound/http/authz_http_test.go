@@ -88,6 +88,9 @@ func (stubEvents) ListFriendsEvents(context.Context, int64) ([]entity.EventWithD
 func (stubEvents) ListForGroup(context.Context, int64, int64) ([]entity.EventWithDetails, error) {
 	return nil, events.ErrEventNotFound
 }
+func (stubEvents) ListJoinableFromGroups(context.Context, int64) ([]entity.EventWithDetails, error) {
+	return nil, nil
+}
 
 type stubPlayers struct{}
 
@@ -195,6 +198,7 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/groups"},
 		{http.MethodGet, "/api/v1/groups/1/posts"},
 		{http.MethodGet, "/api/v1/groups/1/events"},
+		{http.MethodGet, "/api/v1/events/from-groups"},
 		{http.MethodDelete, "/api/v1/groups/1"},
 		{http.MethodPost, "/api/v1/groups/1/transfer-ownership"},
 	}

@@ -1,6 +1,6 @@
 # FindFore Development Guidelines for Claude
 
-**Last Updated:** August 07, 2026
+**Last Updated:** August 14, 2026
 **Project Name:** FindFore
 **Repository:** https://github.com/errabun/FindFore
 **Version:** 1.0
@@ -80,7 +80,7 @@ Organized by the four pillars defined in `VISION.md`:
 - Tee time creation: private (invite friends) or public (open spots)
 - Invitations, RSVPs, waiting lists, cancellation alerts
 - Smart Tee Time Feed — proactive surface, not manual search (Phase 2)
-- Provider integration (Lightspeed or similar) — Phase 1 remaining work
+- Provider integration (Lightspeed / GolfNow / similar) — **deferred** until partner API access; HTTP booking + fake provider already exist. Do not build a live adapter or booking checkout in the meantime.
 
 **Playing (on-course companion)**
 - GPS, digital scorecard, live leaderboard, betting formats (Phase 2)

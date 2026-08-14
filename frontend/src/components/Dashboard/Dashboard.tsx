@@ -3,6 +3,7 @@ import { Tabs, SimpleGrid, Paper, Text, Title, Group, Box, Stack } from '@mantin
 import { FiCalendar, FiMail, FiUsers } from 'react-icons/fi';
 import PlayerList from '../PlayerList/PlayerList';
 import TeeTimeContainer from '../TeeTimeContainer/TeeTimeContainer';
+import TeeTime from '../TeeTime/TeeTime';
 import Newsfeed from '../Newsfeed/Newsfeed';
 import { FriendRequestCard } from '../PlayerCard/PlayerCard';
 import { filterCommitted, filterAvailable } from '../../domain/teeTime/teeTimeService';
@@ -18,6 +19,7 @@ import type {
 interface DashboardProps {
   events: Event[];
   friendsEvents: Event[];
+  groupJoinableEvents?: Event[];
   currentUserId: number;
   currentUserName: string;
   screenWidth: number;
@@ -32,6 +34,7 @@ interface DashboardProps {
 const Dashboard = ({
   events,
   friendsEvents,
+  groupJoinableEvents = [],
   currentUserId,
   currentUserName,
   screenWidth,
@@ -112,6 +115,31 @@ const Dashboard = ({
             </Text>
           </Paper>
         </SimpleGrid>
+
+        {groupJoinableEvents.length > 0 && (
+          <Paper p='md' shadow='sm' mb='md' style={{ border: '1px solid var(--ff-border)' }}>
+            <Group gap='xs' mb='sm'>
+              <FiUsers style={{ color: 'var(--ff-icon-primary)' }} />
+              <Title order={5} style={{ color: 'var(--ff-heading)' }}>
+                Groups need a player
+              </Title>
+              <Text size='sm' c='dimmed'>
+                ({groupJoinableEvents.length})
+              </Text>
+            </Group>
+            <Stack gap='sm'>
+              {groupJoinableEvents.map((event) => (
+                <TeeTime
+                  key={event.id}
+                  type='joinable'
+                  event={event}
+                  handleInviteAction={handleInviteAction}
+                  currentUserId={currentUserId}
+                />
+              ))}
+            </Stack>
+          </Paper>
+        )}
 
         {incomingRequests.length > 0 && (
           <Paper p='md' shadow='sm' mb='md' style={{ border: '1px solid var(--ff-border)' }}>

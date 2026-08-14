@@ -24,7 +24,7 @@ import type { Event, Friend } from '../../types';
 
 function App() {
   const { hostPlayer, loginError, allPlayers, validateLogin, logout, clearLoginError, updateProfile, changePassword } = useAuth();
-  const { events, friendsEvents, updateInvite, cancelCommitment, joinTeeTime, refreshEvents } = useTeeTimes(hostPlayer);
+  const { events, friendsEvents, groupJoinableEvents, updateInvite, cancelCommitment, joinTeeTime, refreshEvents } = useTeeTimes(hostPlayer);
   const {
     friends,
     incomingRequests,
@@ -76,6 +76,7 @@ function App() {
               <Dashboard
                 events={events}
                 friendsEvents={friendsEvents}
+                groupJoinableEvents={groupJoinableEvents}
                 currentUserId={hostPlayer}
                 currentUserName={currentUserName}
                 screenWidth={screenWidth}

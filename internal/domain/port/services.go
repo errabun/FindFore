@@ -33,6 +33,7 @@ type EventService interface {
 	Delete(ctx context.Context, actorID, id int64) error
 	ListFriendsEvents(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error)
 	ListForGroup(ctx context.Context, actorID, groupID int64) ([]entity.EventWithDetails, error)
+	ListJoinableFromGroups(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error)
 }
 
 type PlayerEventService interface {

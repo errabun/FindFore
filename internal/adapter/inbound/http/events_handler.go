@@ -3,6 +3,7 @@ package httphandler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -46,6 +47,7 @@ func mapEventToResponse(e entity.EventWithDetails) EventResponse {
 		Closed:         closed,
 		RemainingSpots: e.RemainingSpots,
 		GroupID:        e.GroupID,
+		GroupName:      e.GroupName,
 	}
 }
 
@@ -207,6 +209,10 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if event.GroupID != nil && h.posts != nil {
+		_, _ = h.posts.CreateForGroup(r.Context(), actorID, *event.GroupID, groupRoundPostBody(*event))
+	}
+
 	respondJSON(w, http.StatusCreated, mapEventToResponse(*event))
 }
 
@@ -351,4 +357,34 @@ func (h *Handler) ListGroupEvents(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, mapEventToResponse(e))
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"events": resp})
+}
+
+func (h *Handler) ListJoinableGroupEvents(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+
+	listed, err := h.events.ListJoinableFromGroups(r.Context(), actorID)
+	if err != nil {
+		status, code, msg := eventErrorStatus(err)
+		respondLoggedError(w, r, status, code, msg, err)
+		return
+	}
+
+	resp := make([]EventResponse, 0, len(listed))
+	for _, e := range listed {
+		resp = append(resp, mapEventToResponse(e))
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"events": resp})
+}
+
+func groupRoundPostBody(e entity.EventWithDetails) string {
+	spots := e.RemainingSpots
+	noun := "spots"
+	if spots == 1 {
+		noun = "spot"
+	}
+	return fmt.Sprintf("Planned a round at %s on %s at %s — %d %s open.", e.CourseName, e.Date, e.TeeTime, spots, noun)
 }

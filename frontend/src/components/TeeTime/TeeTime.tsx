@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { Card, Text, Button, Group } from '@mantine/core';
+import { Card, Text, Button, Group, Badge } from '@mantine/core';
 import { FiCalendar, FiClock, FiUser, FiUsers, FiEdit2 } from 'react-icons/fi';
 import { formatTeeTime } from '../../domain/teeTime/formatters';
 import { isHost as checkIsHost } from '../../domain/teeTime/teeTimeService';
@@ -31,9 +31,16 @@ const TeeTime = ({ type, event, handleInviteAction, currentUserId }: TeeTimeProp
       p='md'
       onClick={type === 'committed' && isHost ? () => navigate(`/edit-tee-time/${event.id}`) : undefined}
     >
-      <Text fw={700} style={{ color: 'var(--ff-heading)' }} size='md' mb='xs'>
-        {event.course_name}
-      </Text>
+      <Group justify='space-between' align='flex-start' mb='xs' wrap='nowrap'>
+        <Text fw={700} style={{ color: 'var(--ff-heading)' }} size='md'>
+          {event.course_name}
+        </Text>
+        {event.group_name && (
+          <Badge size='sm' variant='light' color='forest'>
+            {event.group_name}
+          </Badge>
+        )}
+      </Group>
 
       <Group gap='lg' mb='xs'>
         <Group gap={6}>
