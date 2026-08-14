@@ -1,2 +1,2 @@
-// Package groups will own golf groups, clubs, and leagues as that pillar matures.
+// Package groups owns persistent golfer groups, membership, and invitations.
 package groups

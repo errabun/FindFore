@@ -59,6 +59,36 @@ type Friendship struct {
 	Status      int32
 }
 
+type Group struct {
+	ID            int64
+	OwnerPlayerID int64
+	Name          string
+	Description   string
+	Privacy       string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type GroupInvitation struct {
+	ID              int64
+	GroupID         int64
+	InviterPlayerID int64
+	InviteePlayerID int64
+	CreatedAt       time.Time
+	ExpiresAt       sql.NullTime
+	AcceptedAt      sql.NullTime
+	DeclinedAt      sql.NullTime
+}
+
+type GroupMembership struct {
+	GroupID   int64
+	PlayerID  int64
+	Role      string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Player struct {
 	ID             int64
 	Name           sql.NullString

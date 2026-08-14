@@ -16,6 +16,7 @@ import (
 	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/application/feed"
 	"github.com/ericrabun/findfore-go/internal/application/friends"
+	"github.com/ericrabun/findfore-go/internal/application/groups"
 	"github.com/ericrabun/findfore-go/internal/application/players"
 	"github.com/ericrabun/findfore-go/internal/application/sessions"
 	"github.com/ericrabun/findfore-go/internal/config"
@@ -63,8 +64,10 @@ func main() {
 	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo)
 	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
 	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo)
+	groupRepo := postgres.NewGroupRepo(queries, db)
+	groupSvc := groups.NewService(groupRepo, playerRepo)
 
-	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc, bookingSvc)
+	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc, bookingSvc, groupSvc)
 	r := httphandler.NewRouter(h, cfg.JWTSecret, playerRepo)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

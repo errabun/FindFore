@@ -98,3 +98,57 @@ type BookingService interface {
 	CancelBooking(ctx context.Context, actorID, reservationID int64) (*entity.Reservation, error)
 	ListReservationPlayers(ctx context.Context, reservationID int64) ([]entity.ReservationPlayer, error)
 }
+
+type GroupDetails struct {
+	Group       entity.Group
+	OwnerName   string
+	MemberCount int64
+	Viewer      *entity.GroupMembership
+}
+
+type GroupMember struct {
+	PlayerID   int64
+	PlayerName string
+	Role       string
+	Status     string
+}
+
+type GroupInvitationView struct {
+	Invitation  entity.GroupInvitation
+	GroupName   string
+	InviterName string
+}
+
+type CreateGroupInput struct {
+	ActorID     int64
+	Name        string
+	Description string
+	Privacy     string
+}
+
+type UpdateGroupInput struct {
+	ActorID     int64
+	GroupID     int64
+	Name        string
+	Description string
+	Privacy     string
+}
+
+type GroupService interface {
+	Create(ctx context.Context, in CreateGroupInput) (*GroupDetails, error)
+	Get(ctx context.Context, actorID, groupID int64) (*GroupDetails, error)
+	ListMine(ctx context.Context, actorID int64, limit, offset int32) ([]GroupDetails, error)
+	ListDiscover(ctx context.Context, actorID int64, search string, limit, offset int32) ([]GroupDetails, error)
+	Update(ctx context.Context, in UpdateGroupInput) (*GroupDetails, error)
+	Join(ctx context.Context, actorID, groupID int64) (*entity.GroupMembership, error)
+	Leave(ctx context.Context, actorID, groupID int64) error
+	ListMembers(ctx context.Context, actorID, groupID int64, limit, offset int32) ([]GroupMember, error)
+	RemoveMember(ctx context.Context, actorID, groupID, playerID int64) error
+	Invite(ctx context.Context, actorID, groupID, inviteeID int64) (*entity.GroupInvitation, error)
+	ListMyInvitations(ctx context.Context, actorID int64) ([]GroupInvitationView, error)
+	AcceptInvitation(ctx context.Context, actorID, invitationID int64) (*entity.GroupMembership, error)
+	DeclineInvitation(ctx context.Context, actorID, invitationID int64) error
+	ListJoinRequests(ctx context.Context, actorID, groupID int64) ([]GroupMember, error)
+	ApproveJoinRequest(ctx context.Context, actorID, groupID, playerID int64) (*entity.GroupMembership, error)
+	DenyJoinRequest(ctx context.Context, actorID, groupID, playerID int64) error
+}

@@ -21,7 +21,8 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
     navigate('/login');
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) =>
+    location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`));
 
   const navLinkStyle = (path: string): React.CSSProperties => ({
     color: 'var(--mantine-color-white)',
@@ -121,6 +122,17 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
               Create Tee Time
             </Anchor>
             {isLoggedIn && (
+              <Anchor
+                component={Link}
+                to='/groups'
+                data-cy='groups-link'
+                underline='never'
+                style={navLinkStyle('/groups')}
+              >
+                Groups
+              </Anchor>
+            )}
+            {isLoggedIn && (
               <>
                 <Anchor
                   component={Link}
@@ -188,6 +200,17 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
               >
                 Create Tee Time
               </UnstyledButton>
+              {isLoggedIn && (
+                <UnstyledButton
+                  component={Link}
+                  to='/groups'
+                  data-cy='groups-link'
+                  onClick={() => setMobileNav(false)}
+                  style={mobileLinkStyle}
+                >
+                  Groups
+                </UnstyledButton>
+              )}
               {screenWidth <= 1024 && (
                 <UnstyledButton
                   component={Link}

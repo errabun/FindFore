@@ -10,6 +10,8 @@ export const endpoints = {
   friendships: `${API_BASE}/api/v1/friendships`,
   posts: `${API_BASE}/api/v1/posts`,
   sessions: `${API_BASE}/api/v1/sessions`,
+  groups: `${API_BASE}/api/v1/groups`,
+  groupInvitations: `${API_BASE}/api/v1/group-invitations`,
 };
 
 export class ApiError extends Error {

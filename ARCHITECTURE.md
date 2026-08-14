@@ -211,6 +211,29 @@ Authenticated (`/api/v1`):
 
 Unknown provider outcome → `503` + `provider_outcome_unknown` (retry same `Idempotency-Key`). Provider reject / conflicts → `409`. Not owner → `403`. Missing/invalid `Idempotency-Key` or party → `400`. Oversized body → `413`.
 
+### HTTP groups API
+
+Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Owner cannot leave in v1.
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/groups` | Create; actor becomes owner (transactional membership) |
+| `GET` | `/groups?mine=1` | Active memberships |
+| `GET` | `/groups?search=` | Discover **public** groups (`limit`/`offset`) |
+| `GET` | `/groups/{id}` | Details + `viewer_membership` + `member_count` |
+| `PATCH` | `/groups/{id}` | Owner/admin |
+| `POST` | `/groups/{id}/join` | Public → active; private → pending; outstanding invite → accept |
+| `POST` | `/groups/{id}/leave` | Members and pending requests; owner → `409` |
+| `GET` | `/groups/{id}/members` | Active members only (active members) |
+| `DELETE` | `/groups/{id}/members/{playerId}` | Owner/admin; cannot remove owner |
+| `POST` | `/groups/{id}/invitations` | Owner/admin; `{player_id}` |
+| `GET` | `/groups/{id}/join-requests` | Pending requests (owner/admin) |
+| `POST` | `/groups/{id}/join-requests/{playerId}/approve\|deny` | Deny deletes pending (retry allowed) |
+| `GET` | `/group-invitations` | Outstanding invites for the actor |
+| `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |
+
+Schema: `000014` (`groups`, `group_memberships`, `group_invitations`). Join assigns `member`; never honor a client-supplied role.
+
 ### Twelve scenario walkthroughs
 
 Domain stays provider-agnostic. Lightspeed is the concrete walkthrough; **ForeUP health check** = “same domain transitions, different adapter DTO mapping.”
@@ -311,9 +334,8 @@ internal/application/booking/
 
 | Package | Role today |
 |---|---|
-| `players`, `sessions`, `courses`, `events`, `feed`, `friends` | Live application services |
-| `booking` | Scaffold for provider booking (Lightspeed / ForeUP / GolfNow) |
-| `groups`, `notifications` | Reserved; fill in as those pillars land |
+| `players`, `sessions`, `courses`, `events`, `feed`, `friends`, `booking`, `groups` | Live application services |
+| `notifications` | Reserved; fill in as that pillar lands |
 | `apperr` | Shared validation errors only |
 
 Do not invent abstractions early — split files and add DTOs when a domain earns them.

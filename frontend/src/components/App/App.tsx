@@ -6,6 +6,9 @@ import CreateProfile from '../CreateProfile/CreateProfile';
 import EventForm from '../EventForm/EventForm';
 import EditTeeTime from '../EditTeeTime/EditTeeTime';
 import Profile from '../Profile/Profile';
+import GroupsPage from '../Groups/GroupsPage';
+import GroupDetailPage from '../Groups/GroupDetailPage';
+import CreateGroupForm from '../Groups/CreateGroupForm';
 import {
   BrowserRouter as Router,
   Routes,
@@ -136,6 +139,36 @@ function App() {
                 friends={friends}
                 refreshEvents={refreshEvents}
               />
+            )
+          }
+        />
+        <Route
+          path='/groups'
+          element={
+            !hostPlayer ? (
+              <Navigate to='/login' replace />
+            ) : (
+              <GroupsPage hostPlayer={hostPlayer} />
+            )
+          }
+        />
+        <Route
+          path='/groups/new'
+          element={
+            !hostPlayer ? (
+              <Navigate to='/login' replace />
+            ) : (
+              <CreateGroupForm />
+            )
+          }
+        />
+        <Route
+          path='/groups/:groupId'
+          element={
+            !hostPlayer ? (
+              <Navigate to='/login' replace />
+            ) : (
+              <GroupDetailPage hostPlayer={hostPlayer} players={allPlayers} />
             )
           }
         />

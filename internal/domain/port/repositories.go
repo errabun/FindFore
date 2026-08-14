@@ -120,3 +120,40 @@ type ReplyRepository interface {
 	Create(ctx context.Context, postID, playerID int64, body string) (*entity.Reply, error)
 	Delete(ctx context.Context, id, playerID int64) error
 }
+
+type GroupMemberRow struct {
+	Membership entity.GroupMembership
+	PlayerName string
+}
+
+type GroupInvitationRow struct {
+	Invitation  entity.GroupInvitation
+	GroupName   string
+	InviterName string
+}
+
+type GroupRepository interface {
+	GetByID(ctx context.Context, id int64) (*entity.Group, error)
+	CreateWithOwner(ctx context.Context, g entity.Group) (*entity.Group, error)
+	Update(ctx context.Context, g entity.Group) (*entity.Group, error)
+	ListPublic(ctx context.Context, search string, limit, offset int32) ([]entity.Group, error)
+	ListByPlayer(ctx context.Context, playerID int64, limit, offset int32) ([]entity.Group, error)
+	CountActiveMembers(ctx context.Context, groupID int64) (int64, error)
+
+	GetMembership(ctx context.Context, groupID, playerID int64) (*entity.GroupMembership, error)
+	ListActiveMembers(ctx context.Context, groupID int64, limit, offset int32) ([]GroupMemberRow, error)
+	ListPendingMembers(ctx context.Context, groupID int64) ([]GroupMemberRow, error)
+	InsertMembership(ctx context.Context, m entity.GroupMembership) (*entity.GroupMembership, error)
+	UpdateMembership(ctx context.Context, m entity.GroupMembership) (*entity.GroupMembership, error)
+	DeleteMembership(ctx context.Context, groupID, playerID int64) error
+
+	GetInvitationByID(ctx context.Context, id int64) (*entity.GroupInvitation, error)
+	GetOutstandingInvitation(ctx context.Context, groupID, inviteeID int64) (*entity.GroupInvitation, error)
+	ListInvitationsByInvitee(ctx context.Context, inviteeID int64) ([]GroupInvitationRow, error)
+	InsertInvitation(ctx context.Context, inv entity.GroupInvitation) (*entity.GroupInvitation, error)
+	MarkInvitationAccepted(ctx context.Context, id int64) (*entity.GroupInvitation, error)
+	MarkInvitationDeclined(ctx context.Context, id int64) (*entity.GroupInvitation, error)
+
+	// AcceptInvitation marks the invite accepted and upserts an active member row in one transaction.
+	AcceptInvitation(ctx context.Context, invitationID, playerID int64) (*entity.GroupMembership, error)
+}

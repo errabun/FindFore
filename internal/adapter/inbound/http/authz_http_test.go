@@ -160,7 +160,7 @@ func testRouter(friendships stubFriendships) http.Handler {
 }
 
 func testRouterWith(playerEvents stubPlayerEvents, friendships stubFriendships) http.Handler {
-	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, playerEvents, friendships, stubPosts{}, nil)
+	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, playerEvents, friendships, stubPosts{}, nil, nil)
 	return httphandler.NewRouter(h, testJWTSecret, stubTokenVersions{versions: map[int64]int32{1: 0, 2: 0}})
 }
 
@@ -183,6 +183,7 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/players"},
 		{http.MethodGet, "/api/v1/events"},
 		{http.MethodDelete, "/api/v1/event/1"},
+		{http.MethodGet, "/api/v1/groups"},
 	}
 
 	for _, tc := range paths {

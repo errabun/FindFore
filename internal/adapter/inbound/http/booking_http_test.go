@@ -274,7 +274,7 @@ func newBookingHTTPEnv(t *testing.T) *bookingHTTPEnv {
 	require.NoError(t, courses.LinkProvider(context.Background(), 1, entity.ProviderLightspeed, "course-ext"))
 	provider := fakebooking.New(entity.ProviderLightspeed)
 	svc := booking.NewService(tees, res, courses, httpFakePlayers{}, provider)
-	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, stubPlayerEvents{}, stubFriendships{}, stubPosts{}, svc)
+	h := httphandler.New(stubPlayers{}, stubSessions{}, stubCourses{}, stubEvents{}, stubPlayerEvents{}, stubFriendships{}, stubPosts{}, svc, nil)
 	return &bookingHTTPEnv{
 		router: httphandler.NewRouter(h, testJWTSecret, stubTokenVersions{versions: map[int64]int32{1: 0, 2: 0}}),
 		provider: provider, tees: tees, res: res, courses: courses,

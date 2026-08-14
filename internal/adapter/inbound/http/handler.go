@@ -13,6 +13,7 @@ type Handler struct {
 	friendships  port.FriendshipService
 	posts        port.PostService
 	booking      port.BookingService
+	groups       port.GroupService
 }
 
 func New(
@@ -24,6 +25,7 @@ func New(
 	friendships port.FriendshipService,
 	posts port.PostService,
 	bookingSvc port.BookingService,
+	groupsSvc port.GroupService,
 ) *Handler {
 	return &Handler{
 		players:      players,
@@ -34,5 +36,6 @@ func New(
 		friendships:  friendships,
 		posts:        posts,
 		booking:      bookingSvc,
+		groups:       groupsSvc,
 	}
 }
