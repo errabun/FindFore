@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -420,8 +421,11 @@ func (r *GroupRepo) InsertInvitation(ctx context.Context, inv entity.GroupInvita
 	return &out, nil
 }
 
-func (r *GroupRepo) MarkInvitationAccepted(ctx context.Context, id int64) (*entity.GroupInvitation, error) {
-	row, err := r.q.MarkGroupInvitationAccepted(ctx, id)
+func (r *GroupRepo) MarkInvitationAccepted(ctx context.Context, id, inviteeID int64) (*entity.GroupInvitation, error) {
+	row, err := r.q.MarkGroupInvitationAccepted(ctx, sqlcgen.MarkGroupInvitationAcceptedParams{
+		ID:              id,
+		InviteePlayerID: inviteeID,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -446,12 +450,32 @@ func (r *GroupRepo) AcceptInvitation(ctx context.Context, invitationID, playerID
 	defer tx.Rollback()
 	qtx := r.q.WithTx(tx)
 
-	inv, err := qtx.MarkGroupInvitationAccepted(ctx, invitationID)
+	inv, err := qtx.MarkGroupInvitationAccepted(ctx, sqlcgen.MarkGroupInvitationAcceptedParams{
+		ID:              invitationID,
+		InviteePlayerID: playerID,
+	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			existingInv, getErr := qtx.GetGroupInvitationByID(ctx, invitationID)
+			if getErr != nil {
+				return nil, err
+			}
+			if existingInv.InviteePlayerID != playerID {
+				return nil, entity.ErrGroupForbidden
+			}
+			if existingInv.AcceptedAt.Valid {
+				existing, memErr := qtx.GetGroupMembership(ctx, sqlcgen.GetGroupMembershipParams{
+					GroupID: existingInv.GroupID, PlayerID: playerID,
+				})
+				if memErr != nil {
+					return nil, memErr
+				}
+				out := mapMembership(existing)
+				return &out, nil
+			}
+			return nil, entity.ErrGroupConflict
+		}
 		return nil, err
-	}
-	if inv.InviteePlayerID != playerID {
-		return nil, entity.ErrGroupForbidden
 	}
 
 	existing, err := qtx.GetGroupMembership(ctx, sqlcgen.GetGroupMembershipParams{

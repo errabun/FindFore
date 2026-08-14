@@ -6,6 +6,7 @@ import GroupsPage from './GroupsPage';
 import GroupDetailPage from './GroupDetailPage';
 import { renderWithProviders } from '../../test/render';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import type { GroupSummary } from '../../domain/group/types';
 
 vi.mock('../../adapters/api/groupAdapter', () => ({
@@ -18,6 +19,7 @@ vi.mock('../../adapters/api/groupAdapter', () => ({
     listJoinRequests: vi.fn(),
     listGroupInvitations: vi.fn(),
     join: vi.fn(),
+    leave: vi.fn(),
     acceptInvitation: vi.fn(),
     declineInvitation: vi.fn(),
     listPosts: vi.fn(),
@@ -139,5 +141,95 @@ describe('GroupDetailPage', () => {
       'href',
       '/event-form?group=10&name=Saturday%20Morning%20Golf',
     );
+  });
+
+  it('shows that a deleted group no longer exists', async () => {
+    mocked.get.mockRejectedValue(new ApiError(404, 'not_found', 'Resource not found'));
+
+    renderWithProviders(
+      <Routes>
+        <Route path='/groups/:groupId' element={<GroupDetailPage hostPlayer={1} friends={[]} currentUserName='Eric' />} />
+      </Routes>,
+      { route: '/groups/10' },
+    );
+
+    expect(await screen.findByText(/this group no longer exists/i)).toBeInTheDocument();
+  });
+
+  it('shows pending state and does not offer join again', async () => {
+    mocked.get.mockResolvedValue({
+      ...publicGroup,
+      privacy: 'private',
+      viewer_membership: { status: 'pending', role: 'member' },
+    });
+
+    renderWithProviders(
+      <Routes>
+        <Route path='/groups/:groupId' element={<GroupDetailPage hostPlayer={2} friends={[]} currentUserName='Sam' />} />
+      </Routes>,
+      { route: '/groups/10' },
+    );
+
+    expect(await screen.findByText(/request pending/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /join group/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /request to join/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel request/i })).toBeInTheDocument();
+  });
+
+  it('refetches the group after joining', async () => {
+    const user = userEvent.setup();
+    mocked.get
+      .mockResolvedValueOnce(publicGroup)
+      .mockResolvedValue({
+        ...publicGroup,
+        viewer_membership: { status: 'active', role: 'member' },
+        member_count: 4,
+      });
+    mocked.join.mockResolvedValue({
+      player_id: 2,
+      player_name: 'Sam',
+      role: 'member',
+      status: 'active',
+    });
+
+    renderWithProviders(
+      <Routes>
+        <Route path='/groups/:groupId' element={<GroupDetailPage hostPlayer={2} friends={[]} currentUserName='Sam' />} />
+      </Routes>,
+      { route: '/groups/10' },
+    );
+
+    await user.click(await screen.findByRole('button', { name: /join group/i }));
+    await waitFor(() => expect(mocked.join).toHaveBeenCalledWith(10));
+    await waitFor(() => expect(mocked.get.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(await screen.findByText(/joined/i)).toBeInTheDocument();
+  });
+});
+
+describe('GroupsPage invitation accept', () => {
+  it('treats a second accept as already handled', async () => {
+    const user = userEvent.setup();
+    mocked.listInvitations.mockResolvedValue([
+      {
+        id: 7,
+        group_id: 10,
+        group_name: 'Saturday Morning Golf',
+        inviter_player_id: 2,
+        inviter_name: 'Sam',
+        invitee_player_id: 1,
+      },
+    ]);
+    mocked.acceptInvitation.mockResolvedValue({
+      player_id: 1,
+      player_name: 'Eric',
+      role: 'member',
+      status: 'active',
+    });
+
+    renderWithProviders(<GroupsPage hostPlayer={1} />);
+    await user.click(await screen.findByRole('button', { name: /accept/i }));
+    await user.click(await screen.findByRole('button', { name: /accept/i }));
+    await waitFor(() => expect(mocked.acceptInvitation).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

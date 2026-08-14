@@ -18,6 +18,12 @@ type fakeEventRepo struct {
 	nextID       int64
 	activeMember map[string]bool
 	groupNames   map[int64]string
+	groupMembers membershipLookup
+}
+
+type membershipLookup interface {
+	GetMembership(context.Context, int64, int64) (*entity.GroupMembership, error)
+	GetByID(context.Context, int64) (*entity.Group, error)
 }
 
 func newFakeEventRepo() *fakeEventRepo {
@@ -72,14 +78,29 @@ func (r *fakeEventRepo) ListIDsByGroupID(_ context.Context, groupID int64) ([]in
 	return ids, nil
 }
 
+func (r *fakeEventRepo) actorActiveIn(groupID, actorID int64) bool {
+	if r.groupMembers != nil {
+		m, err := r.groupMembers.GetMembership(context.Background(), groupID, actorID)
+		return err == nil && m.IsActive()
+	}
+	return r.activeMember[fmt.Sprintf("%d/%d", groupID, actorID)]
+}
+
 func (r *fakeEventRepo) listedGroupEvent(id int64, e *entity.Event) entity.EventWithDetails {
 	d, ok := r.details[id]
 	if !ok {
 		return entity.EventWithDetails{ID: id, GroupID: e.GroupID, PlannedStartsAt: e.PlannedStartsAt, OpenSpots: e.OpenSpots}
 	}
 	cp := *d
-	if e.GroupID != nil && r.groupNames != nil {
-		cp.GroupName = r.groupNames[*e.GroupID]
+	if e.GroupID != nil {
+		if r.groupNames != nil {
+			cp.GroupName = r.groupNames[*e.GroupID]
+		}
+		if cp.GroupName == "" && r.groupMembers != nil {
+			if g, err := r.groupMembers.GetByID(context.Background(), *e.GroupID); err == nil {
+				cp.GroupName = g.Name
+			}
+		}
 	}
 	return cp
 }
@@ -102,7 +123,7 @@ func (r *fakeEventRepo) ListJoinableGroupDetails(_ context.Context, actorID int6
 		if e.GroupID == nil || e.PlannedStartsAt.Before(now) {
 			continue
 		}
-		if r.activeMember == nil || !r.activeMember[fmt.Sprintf("%d/%d", *e.GroupID, actorID)] {
+		if !r.actorActiveIn(*e.GroupID, actorID) {
 			continue
 		}
 		out = append(out, r.listedGroupEvent(id, e))

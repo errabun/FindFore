@@ -3,6 +3,8 @@ package groups_test
 import (
 	"context"
 	"database/sql"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,12 +160,18 @@ func (f *fakeGroups) TransferOwnership(_ context.Context, groupID, fromPlayerID,
 }
 
 func (f *fakeGroups) ListPublic(_ context.Context, search string, limit, offset int32) ([]entity.Group, error) {
+	q := strings.ToLower(strings.TrimSpace(search))
 	var out []entity.Group
 	for _, g := range f.groups {
-		if g.Privacy == entity.GroupPrivacyPublic {
-			out = append(out, *g)
+		if g.Privacy != entity.GroupPrivacyPublic {
+			continue
 		}
+		if q != "" && !strings.Contains(strings.ToLower(g.Name), q) {
+			continue
+		}
+		out = append(out, *g)
 	}
+	sortGroups(out)
 	return page(out, limit, offset), nil
 }
 
@@ -176,7 +184,17 @@ func (f *fakeGroups) ListByPlayer(_ context.Context, playerID int64, limit, offs
 			}
 		}
 	}
+	sortGroups(out)
 	return page(out, limit, offset), nil
+}
+
+func sortGroups(in []entity.Group) {
+	sort.Slice(in, func(i, j int) bool {
+		if in[i].Name == in[j].Name {
+			return in[i].ID < in[j].ID
+		}
+		return in[i].Name < in[j].Name
+	})
 }
 
 func (f *fakeGroups) summary(g entity.Group, actorID int64) port.GroupDetails {
@@ -354,9 +372,15 @@ func (f *fakeGroups) InsertInvitation(_ context.Context, inv entity.GroupInvitat
 	return &inv, nil
 }
 
-func (f *fakeGroups) MarkInvitationAccepted(_ context.Context, id int64) (*entity.GroupInvitation, error) {
+func (f *fakeGroups) MarkInvitationAccepted(_ context.Context, id, inviteeID int64) (*entity.GroupInvitation, error) {
 	inv, ok := f.invitations[id]
 	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	if inv.InviteePlayerID != inviteeID || inv.AcceptedAt != nil || inv.DeclinedAt != nil {
+		return nil, sql.ErrNoRows
+	}
+	if !inv.IsOutstanding(time.Now().UTC()) {
 		return nil, sql.ErrNoRows
 	}
 	now := time.Now().UTC()
@@ -377,12 +401,9 @@ func (f *fakeGroups) MarkInvitationDeclined(_ context.Context, id int64) (*entit
 }
 
 func (f *fakeGroups) AcceptInvitation(ctx context.Context, invitationID, playerID int64) (*entity.GroupMembership, error) {
-	inv, err := f.MarkInvitationAccepted(ctx, invitationID)
+	inv, err := f.MarkInvitationAccepted(ctx, invitationID, playerID)
 	if err != nil {
 		return nil, err
-	}
-	if inv.InviteePlayerID != playerID {
-		return nil, entity.ErrGroupForbidden
 	}
 	if existing, err := f.GetMembership(ctx, inv.GroupID, playerID); err == nil {
 		existing.Status = entity.GroupMembershipActive
@@ -396,11 +417,13 @@ func (f *fakeGroups) AcceptInvitation(ctx context.Context, invitationID, playerI
 
 func newSvc() (*groups.Service, *fakeGroups) {
 	repo := newFakeGroups()
-	players := newFakePlayers(1, 2, 3, 4)
+	players := newFakePlayers(1, 2, 3, 4, 5, 6)
 	players.byID[1].Name = "Eric"
 	players.byID[2].Name = "Sam"
+	players.byID[3].Name = "Alex"
 	repo.playerNames[1] = "Eric"
 	repo.playerNames[2] = "Sam"
+	repo.playerNames[3] = "Alex"
 	return groups.NewService(repo, players), repo
 }
 
@@ -622,7 +645,7 @@ func TestCancelInvitation(t *testing.T) {
 	require.Empty(t, listed)
 
 	_, err = svc.AcceptInvitation(context.Background(), 2, inv.ID)
-	require.ErrorIs(t, err, groups.ErrInvitationExpired)
+	require.ErrorIs(t, err, groups.ErrGroupConflict)
 }
 
 func TestMemberCannotListInvitations(t *testing.T) {

@@ -213,7 +213,7 @@ Unknown provider outcome → `503` + `provider_outcome_unknown` (retry same `Ide
 
 ### HTTP groups API
 
-Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Owner cannot leave until ownership is transferred.
+Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Pending members and outstanding invitees may view private group details so they can see request/invite state; they cannot list members, posts, or rounds. Owner cannot leave until ownership is transferred. Removing a member does not drop them from a round they already joined. Deleting a group cascades memberships, invitations, and group posts; `events.group_id` is set NULL so the host's round remains (it no longer appears in group feeds).
 
 | Method | Path | Notes |
 |---|---|---|

@@ -76,7 +76,7 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
           Groups
         </Button>
         <Alert color={error ? 'red' : 'gray'} icon={<FiAlertCircle />}>
-          {error || 'Group not found.'}
+          {notFound ? 'This group no longer exists.' : error || 'Group not found.'}
         </Alert>
       </Container>
     );

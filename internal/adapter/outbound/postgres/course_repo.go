@@ -203,4 +203,3 @@ func (r *CourseRepo) LinkProvider(ctx context.Context, courseID int64, provider,
 	}
 	return nil
 }
-

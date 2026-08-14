@@ -227,7 +227,7 @@ func (f *fakeFeedGroups) ListOutstandingInvitations(context.Context, int64) ([]p
 func (f *fakeFeedGroups) InsertInvitation(context.Context, entity.GroupInvitation) (*entity.GroupInvitation, error) {
 	return nil, sql.ErrNoRows
 }
-func (f *fakeFeedGroups) MarkInvitationAccepted(context.Context, int64) (*entity.GroupInvitation, error) {
+func (f *fakeFeedGroups) MarkInvitationAccepted(context.Context, int64, int64) (*entity.GroupInvitation, error) {
 	return nil, sql.ErrNoRows
 }
 func (f *fakeFeedGroups) MarkInvitationDeclined(context.Context, int64) (*entity.GroupInvitation, error) {

@@ -163,7 +163,7 @@ type GroupRepository interface {
 	ListInvitationsByInvitee(ctx context.Context, inviteeID int64) ([]GroupInvitationRow, error)
 	ListOutstandingInvitations(ctx context.Context, groupID int64) ([]GroupInvitationRow, error)
 	InsertInvitation(ctx context.Context, inv entity.GroupInvitation) (*entity.GroupInvitation, error)
-	MarkInvitationAccepted(ctx context.Context, id int64) (*entity.GroupInvitation, error)
+	MarkInvitationAccepted(ctx context.Context, id, inviteeID int64) (*entity.GroupInvitation, error)
 	MarkInvitationDeclined(ctx context.Context, id int64) (*entity.GroupInvitation, error)
 
 	// AcceptInvitation marks the invite accepted and upserts an active member row in one transaction.

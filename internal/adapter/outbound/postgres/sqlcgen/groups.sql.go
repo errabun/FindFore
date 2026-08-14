@@ -765,13 +765,20 @@ const markGroupInvitationAccepted = `-- name: MarkGroupInvitationAccepted :one
 UPDATE group_invitations
 SET accepted_at = NOW()
 WHERE id = $1
+  AND invitee_player_id = $2
   AND accepted_at IS NULL
   AND declined_at IS NULL
+  AND (expires_at IS NULL OR expires_at > NOW())
 RETURNING id, group_id, inviter_player_id, invitee_player_id, created_at, expires_at, accepted_at, declined_at
 `
 
-func (q *Queries) MarkGroupInvitationAccepted(ctx context.Context, id int64) (GroupInvitation, error) {
-	row := q.db.QueryRowContext(ctx, markGroupInvitationAccepted, id)
+type MarkGroupInvitationAcceptedParams struct {
+	ID              int64
+	InviteePlayerID int64
+}
+
+func (q *Queries) MarkGroupInvitationAccepted(ctx context.Context, arg MarkGroupInvitationAcceptedParams) (GroupInvitation, error) {
+	row := q.db.QueryRowContext(ctx, markGroupInvitationAccepted, arg.ID, arg.InviteePlayerID)
 	var i GroupInvitation
 	err := row.Scan(
 		&i.ID,

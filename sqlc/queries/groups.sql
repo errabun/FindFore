@@ -201,9 +201,11 @@ RETURNING id, group_id, inviter_player_id, invitee_player_id, created_at, expire
 -- name: MarkGroupInvitationAccepted :one
 UPDATE group_invitations
 SET accepted_at = NOW()
-WHERE id = $1
+WHERE id = sqlc.arg('id')
+  AND invitee_player_id = sqlc.arg('invitee_player_id')
   AND accepted_at IS NULL
   AND declined_at IS NULL
+  AND (expires_at IS NULL OR expires_at > NOW())
 RETURNING id, group_id, inviter_player_id, invitee_player_id, created_at, expires_at, accepted_at, declined_at;
 
 -- name: MarkGroupInvitationDeclined :one

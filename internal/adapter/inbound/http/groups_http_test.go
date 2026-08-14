@@ -253,10 +253,14 @@ func (f *httpFakeGroups) InsertInvitation(_ context.Context, inv entity.GroupInv
 	f.invitations[inv.ID] = &cp
 	return &inv, nil
 }
-func (f *httpFakeGroups) MarkInvitationAccepted(_ context.Context, id int64) (*entity.GroupInvitation, error) {
+func (f *httpFakeGroups) MarkInvitationAccepted(_ context.Context, id, inviteeID int64) (*entity.GroupInvitation, error) {
+	inv, ok := f.invitations[id]
+	if !ok || inv.InviteePlayerID != inviteeID || inv.AcceptedAt != nil || inv.DeclinedAt != nil {
+		return nil, sql.ErrNoRows
+	}
 	now := time.Now().UTC()
-	f.invitations[id].AcceptedAt = &now
-	cp := *f.invitations[id]
+	inv.AcceptedAt = &now
+	cp := *inv
 	return &cp, nil
 }
 func (f *httpFakeGroups) MarkInvitationDeclined(_ context.Context, id int64) (*entity.GroupInvitation, error) {
@@ -266,7 +270,7 @@ func (f *httpFakeGroups) MarkInvitationDeclined(_ context.Context, id int64) (*e
 	return &cp, nil
 }
 func (f *httpFakeGroups) AcceptInvitation(ctx context.Context, invitationID, playerID int64) (*entity.GroupMembership, error) {
-	inv, err := f.MarkInvitationAccepted(ctx, invitationID)
+	inv, err := f.MarkInvitationAccepted(ctx, invitationID, playerID)
 	if err != nil {
 		return nil, err
 	}
@@ -380,6 +384,10 @@ func TestGroupsHTTPInviteAccept(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &inv))
 	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/group-invitations/%d/accept", inv.ID), "", 2)
 	require.Equal(t, http.StatusOK, rec.Code)
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/group-invitations/%d/accept", inv.ID), "", 2)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = e.do(t, http.MethodPost, fmt.Sprintf("/api/v1/group-invitations/%d/accept", inv.ID), "", 3)
+	require.Equal(t, http.StatusForbidden, rec.Code)
 }
 
 func TestGroupsHTTPMemberCannotRemove(t *testing.T) {

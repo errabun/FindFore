@@ -119,6 +119,9 @@ func (s *Service) AcceptInvitation(ctx context.Context, actorID, invitationID in
 				return m, nil
 			}
 		}
+		if inv.DeclinedAt != nil {
+			return nil, ErrGroupConflict
+		}
 		return nil, ErrInvitationExpired
 	}
 	return s.groups.AcceptInvitation(ctx, invitationID, actorID)

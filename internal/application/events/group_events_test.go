@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ericrabun/findfore-go/internal/application/events"
+	"github.com/ericrabun/findfore-go/internal/application/groups"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
@@ -54,7 +55,15 @@ func (f *fakeEventGroups) CreateWithOwner(context.Context, entity.Group) (*entit
 func (f *fakeEventGroups) Update(context.Context, entity.Group) (*entity.Group, error) {
 	return nil, sql.ErrNoRows
 }
-func (f *fakeEventGroups) Delete(context.Context, int64) error { return nil }
+func (f *fakeEventGroups) Delete(_ context.Context, id int64) error {
+	delete(f.groups, id)
+	for k, m := range f.memberships {
+		if m.GroupID == id {
+			delete(f.memberships, k)
+		}
+	}
+	return nil
+}
 func (f *fakeEventGroups) TransferOwnership(context.Context, int64, int64, int64) error {
 	return nil
 }
@@ -91,7 +100,10 @@ func (f *fakeEventGroups) InsertMembership(context.Context, entity.GroupMembersh
 func (f *fakeEventGroups) UpdateMembership(context.Context, entity.GroupMembership) (*entity.GroupMembership, error) {
 	return nil, sql.ErrNoRows
 }
-func (f *fakeEventGroups) DeleteMembership(context.Context, int64, int64) error { return nil }
+func (f *fakeEventGroups) DeleteMembership(_ context.Context, groupID, playerID int64) error {
+	delete(f.memberships, fmt.Sprintf("%d/%d", groupID, playerID))
+	return nil
+}
 func (f *fakeEventGroups) GetInvitationByID(context.Context, int64) (*entity.GroupInvitation, error) {
 	return nil, sql.ErrNoRows
 }
@@ -107,7 +119,7 @@ func (f *fakeEventGroups) ListOutstandingInvitations(context.Context, int64) ([]
 func (f *fakeEventGroups) InsertInvitation(context.Context, entity.GroupInvitation) (*entity.GroupInvitation, error) {
 	return nil, sql.ErrNoRows
 }
-func (f *fakeEventGroups) MarkInvitationAccepted(context.Context, int64) (*entity.GroupInvitation, error) {
+func (f *fakeEventGroups) MarkInvitationAccepted(context.Context, int64, int64) (*entity.GroupInvitation, error) {
 	return nil, sql.ErrNoRows
 }
 func (f *fakeEventGroups) MarkInvitationDeclined(context.Context, int64) (*entity.GroupInvitation, error) {
@@ -128,6 +140,7 @@ func seededGroupEvents() (*fakeEventRepo, *fakePlayerEventRepo, *fakeEventGroups
 		entity.GroupMembership{GroupID: 1, PlayerID: 3, Role: entity.GroupRoleMember, Status: entity.GroupMembershipPending},
 	)
 	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{}, groups)
+	eventRepo.groupMembers = groups
 	eventRepo.activeMember = map[string]bool{}
 	eventRepo.groupNames = map[int64]string{}
 	for _, m := range groups.memberships {
@@ -240,3 +253,102 @@ func TestJoinableGroupRoundsNeedOneMore(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, strangerListed)
 }
+
+func TestRemovedMemberRemainsOnExistingRound(t *testing.T) {
+	eventRepo, playerEvents, groupRepo, eventSvc := seededGroupEvents()
+	groupSvc, _ := newGroupServiceForEvents(groupRepo)
+	gid := int64(1)
+	starts := futureStarts()
+	eventRepo.byID[20] = &entity.Event{ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4, PlannedStartsAt: starts}
+	eventRepo.details[20] = &entity.EventWithDetails{
+		ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4,
+		PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone, CourseName: "Test Course",
+	}
+	playerEvents.byStatus[20] = map[entity.InviteStatus][]int64{
+		entity.InviteStatusAccepted: {1, 2},
+	}
+
+	ctx := context.Background()
+	require.NoError(t, groupSvc.RemoveMember(ctx, 1, 1, 2))
+
+	_, err := eventSvc.ListForGroup(ctx, 2, 1)
+	require.ErrorIs(t, err, events.ErrEventNotFound)
+
+	got, err := eventSvc.Get(ctx, 20, 2)
+	require.NoError(t, err)
+	require.Contains(t, got.Accepted, int64(2))
+
+	joinable, err := eventSvc.ListJoinableFromGroups(ctx, 2)
+	require.NoError(t, err)
+	require.Empty(t, joinable)
+}
+
+func TestGroupDeleteHidesRoundsFromGroupFeeds(t *testing.T) {
+	eventRepo, playerEvents, groupRepo, eventSvc := seededGroupEvents()
+	groupSvc, _ := newGroupServiceForEvents(groupRepo)
+	gid := int64(1)
+	starts := futureStarts()
+	eventRepo.byID[20] = &entity.Event{ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4, PlannedStartsAt: starts}
+	eventRepo.details[20] = &entity.EventWithDetails{
+		ID: 20, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4,
+		PlannedStartsAt: starts, CourseTimezone: entity.DefaultCourseTimezone,
+	}
+	playerEvents.byStatus[20] = map[entity.InviteStatus][]int64{
+		entity.InviteStatusAccepted: {1},
+	}
+
+	ctx := context.Background()
+	require.NoError(t, groupSvc.Delete(ctx, 1, 1))
+
+	// Application fakes do not apply FK SET NULL; production SQL does (see fk_invariants_test).
+	// After the group is gone, group feeds and discovery must not surface the round.
+	_, err := eventSvc.ListForGroup(ctx, 1, 1)
+	require.ErrorIs(t, err, events.ErrEventNotFound)
+	joinable, err := eventSvc.ListJoinableFromGroups(ctx, 1)
+	require.NoError(t, err)
+	require.Empty(t, joinable)
+
+	got, err := eventSvc.Get(ctx, 20, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(20), got.ID)
+}
+
+func newGroupServiceForEvents(repo *fakeEventGroups) (*groups.Service, *fakeEventGroups) {
+	players := &eventPlayers{byID: map[int64]*entity.Player{
+		1: {ID: 1, Name: "Eric"},
+		2: {ID: 2, Name: "Sam"},
+	}}
+	return groups.NewService(repo, players), repo
+}
+
+type eventPlayers struct {
+	byID map[int64]*entity.Player
+}
+
+func (f *eventPlayers) List(context.Context) ([]entity.Player, error) { return nil, nil }
+func (f *eventPlayers) GetByID(_ context.Context, id int64) (*entity.Player, error) {
+	p, ok := f.byID[id]
+	if !ok {
+		return nil, sql.ErrNoRows
+	}
+	cp := *p
+	return &cp, nil
+}
+func (f *eventPlayers) GetByEmail(context.Context, string) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *eventPlayers) GetByUsername(context.Context, string) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *eventPlayers) Create(context.Context, entity.Player) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *eventPlayers) Update(context.Context, entity.Player) (*entity.Player, error) {
+	return nil, sql.ErrNoRows
+}
+func (f *eventPlayers) GetPasswordByID(context.Context, int64) (string, error) {
+	return "", sql.ErrNoRows
+}
+func (f *eventPlayers) UpdatePassword(context.Context, int64, string) error   { return sql.ErrNoRows }
+func (f *eventPlayers) GetTokenVersion(context.Context, int64) (int32, error) { return 0, nil }
+func (f *eventPlayers) ListIDsExcept(context.Context, int64) ([]int64, error) { return nil, nil }
