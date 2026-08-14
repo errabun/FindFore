@@ -58,3 +58,25 @@ func (s *Service) ListFriendsEvents(ctx context.Context, actorID int64) ([]entit
 	}
 	return result, nil
 }
+
+func (s *Service) ListForGroup(ctx context.Context, actorID, groupID int64) ([]entity.EventWithDetails, error) {
+	if err := requireActiveGroupMember(ctx, s.groups, groupID, actorID); err != nil {
+		return nil, err
+	}
+	_ = s.events.DeletePast(ctx)
+
+	eventIDs, err := s.events.ListIDsByGroupID(ctx, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("list group event IDs: %w", err)
+	}
+
+	result := make([]entity.EventWithDetails, 0, len(eventIDs))
+	for _, eid := range eventIDs {
+		details, err := s.buildDetails(ctx, eid)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *details)
+	}
+	return result, nil
+}

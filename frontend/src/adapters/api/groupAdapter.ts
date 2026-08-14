@@ -1,5 +1,6 @@
 import type { GroupInvitation, GroupMember, GroupSummary } from '../../domain/group/types';
 import type { Post } from '../../domain/social/types';
+import type { Event } from '../../domain/teeTime/types';
 import type { GroupPort } from '../../ports/groupPort';
 import { endpoints, request, requestVoid } from './httpClient';
 
@@ -100,5 +101,9 @@ export const groupAdapter: GroupPort = {
       method: 'POST',
       body: JSON.stringify({ body }),
     });
+  },
+  async listEvents(groupId) {
+    const body = await request<{ events: Event[] }>(`${endpoints.groups}/${groupId}/events`);
+    return body.events ?? [];
   },
 };

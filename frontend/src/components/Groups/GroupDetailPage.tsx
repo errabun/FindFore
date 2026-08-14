@@ -14,13 +14,14 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { FiAlertCircle, FiArrowLeft, FiMessageSquare, FiUsers } from 'react-icons/fi';
+import { FiAlertCircle, FiArrowLeft, FiCalendar, FiMessageSquare, FiUsers } from 'react-icons/fi';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
 import { useGroup } from '../../hooks/useGroups';
 import type { Friend } from '../../domain/social/types';
 import GroupSettingsPanel from './GroupSettingsPanel';
 import GroupActivity from './GroupActivity';
+import GroupRounds from './GroupRounds';
 
 interface GroupDetailPageProps {
   hostPlayer: number;
@@ -182,6 +183,9 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
             <Tabs.Tab value='activity' leftSection={<FiMessageSquare size={14} />}>
               Activity
             </Tabs.Tab>
+            <Tabs.Tab value='rounds' leftSection={<FiCalendar size={14} />}>
+              Rounds
+            </Tabs.Tab>
             <Tabs.Tab value='members' leftSection={<FiUsers size={14} />}>
               Members
             </Tabs.Tab>
@@ -195,6 +199,10 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
               currentUserName={currentUserName || members.find((m) => m.player_id === hostPlayer)?.player_name || ''}
               canManage={canManage}
             />
+          </Tabs.Panel>
+
+          <Tabs.Panel value='rounds' pt='md'>
+            <GroupRounds groupId={group.id} groupName={group.name} currentUserId={hostPlayer} />
           </Tabs.Panel>
 
           <Tabs.Panel value='members' pt='md'>

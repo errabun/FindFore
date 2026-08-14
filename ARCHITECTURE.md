@@ -235,10 +235,11 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 | `POST` | `/groups/{id}/join-requests/{playerId}/approve\|deny` | Deny deletes pending (retry allowed) |
 | `GET` | `/groups/{id}/posts` | Active members only; 404 otherwise |
 | `POST` | `/groups/{id}/posts` | Active members; `{body}` |
+| `GET` | `/groups/{id}/events` | Upcoming group rounds; active members only; 404 otherwise |
 | `GET` | `/group-invitations` | Outstanding invites for the actor |
 | `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |
 
-Schema: `000014` (`groups`, `group_memberships`, `group_invitations`) and `000015` (`posts.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`.
+Schema: `000014` (`groups`, `group_memberships`, `group_invitations`), `000015` (`posts.group_id`), and `000016` (`events.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`. Group rounds reuse events (`private` forced on create); they do not appear on the public tee-time feed. Deleting a group sets `events.group_id` to NULL so the host's round remains.
 
 ### Twelve scenario walkthroughs
 

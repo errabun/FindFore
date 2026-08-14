@@ -85,6 +85,9 @@ func (stubEvents) Delete(_ context.Context, actorID, _ int64) error {
 func (stubEvents) ListFriendsEvents(context.Context, int64) ([]entity.EventWithDetails, error) {
 	return nil, nil
 }
+func (stubEvents) ListForGroup(context.Context, int64, int64) ([]entity.EventWithDetails, error) {
+	return nil, events.ErrEventNotFound
+}
 
 type stubPlayers struct{}
 
@@ -191,6 +194,7 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodDelete, "/api/v1/event/1"},
 		{http.MethodGet, "/api/v1/groups"},
 		{http.MethodGet, "/api/v1/groups/1/posts"},
+		{http.MethodGet, "/api/v1/groups/1/events"},
 		{http.MethodDelete, "/api/v1/groups/1"},
 		{http.MethodPost, "/api/v1/groups/1/transfer-ownership"},
 	}

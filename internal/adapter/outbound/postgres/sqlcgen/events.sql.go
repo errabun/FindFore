@@ -13,11 +13,11 @@ import (
 
 const createEvent = `-- name: CreateEvent :one
 INSERT INTO events (
-    course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id,
+    course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id, group_id,
     created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-RETURNING id, course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+RETURNING id, course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id, group_id
 `
 
 type CreateEventParams struct {
@@ -28,6 +28,7 @@ type CreateEventParams struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 }
 
 type CreateEventRow struct {
@@ -39,6 +40,7 @@ type CreateEventRow struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 }
 
 func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (CreateEventRow, error) {
@@ -50,6 +52,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Creat
 		arg.HostID,
 		arg.PlannedStartsAt,
 		arg.TeeTimeID,
+		arg.GroupID,
 	)
 	var i CreateEventRow
 	err := row.Scan(
@@ -61,6 +64,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Creat
 		&i.HostID,
 		&i.PlannedStartsAt,
 		&i.TeeTimeID,
+		&i.GroupID,
 	)
 	return i, err
 }
@@ -85,7 +89,7 @@ func (q *Queries) DeletePastEvents(ctx context.Context) error {
 
 const getEventByID = `-- name: GetEventByID :one
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -102,6 +106,7 @@ type GetEventByIDRow struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 	CourseName      sql.NullString
 	CourseTimezone  sql.NullString
 	HostName        sql.NullString
@@ -119,6 +124,7 @@ func (q *Queries) GetEventByID(ctx context.Context, id int64) (GetEventByIDRow, 
 		&i.HostID,
 		&i.PlannedStartsAt,
 		&i.TeeTimeID,
+		&i.GroupID,
 		&i.CourseName,
 		&i.CourseTimezone,
 		&i.HostName,
@@ -128,7 +134,7 @@ func (q *Queries) GetEventByID(ctx context.Context, id int64) (GetEventByIDRow, 
 
 const listAllEvents = `-- name: ListAllEvents :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -145,6 +151,7 @@ type ListAllEventsRow struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 	CourseName      sql.NullString
 	CourseTimezone  sql.NullString
 	HostName        sql.NullString
@@ -168,6 +175,7 @@ func (q *Queries) ListAllEvents(ctx context.Context) ([]ListAllEventsRow, error)
 			&i.HostID,
 			&i.PlannedStartsAt,
 			&i.TeeTimeID,
+			&i.GroupID,
 			&i.CourseName,
 			&i.CourseTimezone,
 			&i.HostName,
@@ -187,7 +195,7 @@ func (q *Queries) ListAllEvents(ctx context.Context) ([]ListAllEventsRow, error)
 
 const listEventsByPlayerID = `-- name: ListEventsByPlayerID :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -206,6 +214,7 @@ type ListEventsByPlayerIDRow struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 	CourseName      sql.NullString
 	CourseTimezone  sql.NullString
 	HostName        sql.NullString
@@ -229,6 +238,7 @@ func (q *Queries) ListEventsByPlayerID(ctx context.Context, playerID int64) ([]L
 			&i.HostID,
 			&i.PlannedStartsAt,
 			&i.TeeTimeID,
+			&i.GroupID,
 			&i.CourseName,
 			&i.CourseTimezone,
 			&i.HostName,
@@ -267,6 +277,7 @@ AND e.open_spots > (
   SELECT COUNT(*) FROM player_events pe3
   WHERE pe3.event_id = e.id AND pe3.invite_status = 1
 )
+AND e.group_id IS NULL
 `
 
 type ListFriendsAvailableEventIDsParams struct {
@@ -297,9 +308,40 @@ func (q *Queries) ListFriendsAvailableEventIDs(ctx context.Context, arg ListFrie
 	return items, nil
 }
 
+const listGroupEventIDs = `-- name: ListGroupEventIDs :many
+SELECT e.id
+FROM events e
+WHERE e.group_id = $1
+  AND e.planned_starts_at >= NOW()
+ORDER BY e.planned_starts_at ASC, e.id ASC
+`
+
+func (q *Queries) ListGroupEventIDs(ctx context.Context, groupID sql.NullInt64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupEventIDs, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublicEvents = `-- name: ListPublicEvents :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -317,6 +359,7 @@ type ListPublicEventsRow struct {
 	HostID          int64
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 	CourseName      sql.NullString
 	CourseTimezone  sql.NullString
 	HostName        sql.NullString
@@ -340,6 +383,7 @@ func (q *Queries) ListPublicEvents(ctx context.Context) ([]ListPublicEventsRow, 
 			&i.HostID,
 			&i.PlannedStartsAt,
 			&i.TeeTimeID,
+			&i.GroupID,
 			&i.CourseName,
 			&i.CourseTimezone,
 			&i.HostName,

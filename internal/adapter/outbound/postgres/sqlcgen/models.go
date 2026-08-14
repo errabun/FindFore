@@ -48,6 +48,7 @@ type Event struct {
 	UpdatedAt       time.Time
 	PlannedStartsAt time.Time
 	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
 }
 
 type Friendship struct {

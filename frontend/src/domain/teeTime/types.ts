@@ -13,4 +13,5 @@ export interface Event {
   pending: number[];
   closed: number[];
   remaining_spots: number;
+  group_id?: number;
 }

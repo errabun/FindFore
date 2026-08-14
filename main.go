@@ -60,10 +60,10 @@ func main() {
 	playerSvc := players.NewService(playerRepo, friendshipRepo)
 	sessionSvc := sessions.NewService(playerRepo, friendshipRepo, cfg.JWTSecret)
 	courseSvc := courses.NewService(courseRepo, golfCourseClient)
-	eventSvc := events.NewService(eventRepo, playerEventRepo, courseRepo)
-	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo)
 	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
 	groupRepo := postgres.NewGroupRepo(queries, db)
+	eventSvc := events.NewService(eventRepo, playerEventRepo, courseRepo, groupRepo)
+	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo, groupRepo)
 	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo, groupRepo)
 	groupSvc := groups.NewService(groupRepo, playerRepo)
 

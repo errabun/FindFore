@@ -1,6 +1,6 @@
 -- name: ListAllEvents :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -9,7 +9,7 @@ ORDER BY e.planned_starts_at, e.id;
 
 -- name: ListPublicEvents :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -19,7 +19,7 @@ ORDER BY e.planned_starts_at, e.id;
 
 -- name: ListEventsByPlayerID :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -30,7 +30,7 @@ ORDER BY e.planned_starts_at, e.id;
 
 -- name: GetEventByID :one
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
-       e.private, e.host_id, e.planned_starts_at, e.tee_time_id,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
        c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name
 FROM events e
 JOIN courses c ON c.id = e.course_id
@@ -39,11 +39,11 @@ WHERE e.id = $1;
 
 -- name: CreateEvent :one
 INSERT INTO events (
-    course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id,
+    course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id, group_id,
     created_at, updated_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-RETURNING id, course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id;
+VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg('group_id'), NOW(), NOW())
+RETURNING id, course_id, open_spots, number_of_holes, private, host_id, planned_starts_at, tee_time_id, group_id;
 
 -- name: UpdateEvent :exec
 UPDATE events
@@ -77,4 +77,12 @@ AND NOT EXISTS (
 AND e.open_spots > (
   SELECT COUNT(*) FROM player_events pe3
   WHERE pe3.event_id = e.id AND pe3.invite_status = 1
-);
+)
+AND e.group_id IS NULL;
+
+-- name: ListGroupEventIDs :many
+SELECT e.id
+FROM events e
+WHERE e.group_id = $1
+  AND e.planned_starts_at >= NOW()
+ORDER BY e.planned_starts_at ASC, e.id ASC;

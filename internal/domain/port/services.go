@@ -32,6 +32,7 @@ type EventService interface {
 	Update(ctx context.Context, actorID int64, e entity.Event, invitees []int64) (*entity.EventWithDetails, error)
 	Delete(ctx context.Context, actorID, id int64) error
 	ListFriendsEvents(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error)
+	ListForGroup(ctx context.Context, actorID, groupID int64) ([]entity.EventWithDetails, error)
 }
 
 type PlayerEventService interface {

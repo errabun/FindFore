@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
+	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -84,7 +85,7 @@ func (h *Handler) JoinEvent(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusConflict, "conflict", "Event is full")
 			return
 		}
-		if errors.Is(err, entity.ErrEventMissing) {
+		if errors.Is(err, entity.ErrEventMissing) || errors.Is(err, events.ErrEventNotFound) {
 			respondError(w, http.StatusNotFound, "not_found", "Event not found")
 			return
 		}

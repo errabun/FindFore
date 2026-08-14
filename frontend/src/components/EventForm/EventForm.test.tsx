@@ -30,4 +30,17 @@ describe('EventForm privacy UI', () => {
     expect(screen.getByText(/invite friends/i)).toBeInTheDocument();
     expect(screen.getByText('Ashley')).toBeInTheDocument();
   });
+
+  it('hides public/private and friend invites for a group round', () => {
+    renderWithProviders(
+      <EventForm courses={[]} friends={[{ id: 2, name: 'Ashley' }]} hostId={1} refreshEvents={vi.fn()} />,
+      { route: '/event-form?group=10&name=Saturday+Morning+Golf' },
+    );
+
+    expect(screen.getByText(/plan a group round/i)).toBeInTheDocument();
+    expect(screen.getByText(/this round stays in saturday morning golf/i)).toBeInTheDocument();
+    expect(screen.queryByText(/public or private/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/invite friends/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /plan round/i })).toBeInTheDocument();
+  });
 });

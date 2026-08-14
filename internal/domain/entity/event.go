@@ -9,6 +9,7 @@ type Event struct {
 	TeeTime         string // API wall-clock input/output (not a DB column)
 	PlannedStartsAt time.Time
 	TeeTimeID       *int64
+	GroupID         *int64
 	OpenSpots       int32
 	NumberOfHoles   string
 	Private         bool
@@ -23,6 +24,7 @@ type EventWithDetails struct {
 	TeeTime         string
 	PlannedStartsAt time.Time
 	TeeTimeID       *int64
+	GroupID         *int64
 	OpenSpots       int32
 	NumberOfHoles   string
 	Private         bool

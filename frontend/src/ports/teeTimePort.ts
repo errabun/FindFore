@@ -12,6 +12,7 @@ export interface TeeTimePort {
     isPrivate: boolean,
     hostId: number,
     selectedFriends: number[],
+    groupId?: number,
   ): Promise<Event> | undefined;
   updateEvent(
     eventId: number,

@@ -15,7 +15,7 @@ import (
 func TestPlayerEventJoinSuccess(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, nil)
 
 	playerEvents.capacity[10] = 2
 	playerEvents.acceptedCount[10] = 0
@@ -30,7 +30,7 @@ func TestPlayerEventJoinSuccess(t *testing.T) {
 func TestPlayerEventJoinRejectsFullDuplicateAndMissing(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, nil)
 	ctx := context.Background()
 
 	playerEvents.capacity[10] = 1
@@ -51,7 +51,7 @@ func TestPlayerEventJoinRejectsFullDuplicateAndMissing(t *testing.T) {
 func TestPlayerEventAcceptInviteClosesWhenFull(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, nil)
 
 	playerEvents.capacity[3] = 1
 	playerEvents.acceptedCount[3] = 0
@@ -66,7 +66,7 @@ func TestPlayerEventAcceptInviteClosesWhenFull(t *testing.T) {
 func TestPlayerEventAcceptInviteRejectsWhenFull(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, nil)
 
 	playerEvents.capacity[3] = 1
 	playerEvents.acceptedCount[3] = 1
@@ -79,7 +79,7 @@ func TestPlayerEventAcceptInviteRejectsWhenFull(t *testing.T) {
 func TestPlayerEventAcceptInviteIdempotentWhenAlreadyAccepted(t *testing.T) {
 	eventRepo := newFakeEventRepo()
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, eventRepo)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, nil)
 
 	playerEvents.capacity[3] = 2
 	playerEvents.acceptedCount[3] = 1
@@ -91,9 +91,33 @@ func TestPlayerEventAcceptInviteIdempotentWhenAlreadyAccepted(t *testing.T) {
 	assert.Equal(t, int64(1), playerEvents.acceptedCount[3], "should not double-count")
 }
 
+func TestPlayerEventJoinGroupRequiresMembership(t *testing.T) {
+	eventRepo := newFakeEventRepo()
+	playerEvents := newJoinAwarePlayerEventRepo()
+	groups := newFakeEventGroups()
+	groups.seed(
+		entity.Group{ID: 1, OwnerPlayerID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic},
+		entity.GroupMembership{GroupID: 1, PlayerID: 1, Role: entity.GroupRoleOwner, Status: entity.GroupMembershipActive},
+		entity.GroupMembership{GroupID: 1, PlayerID: 2, Role: entity.GroupRoleMember, Status: entity.GroupMembershipActive},
+	)
+	svc := events.NewPlayerEventService(playerEvents, eventRepo, groups)
+
+	gid := int64(1)
+	eventRepo.byID[10] = &entity.Event{ID: 10, HostID: 1, Private: true, GroupID: &gid, OpenSpots: 4}
+	playerEvents.capacity[10] = 4
+	playerEvents.acceptedCount[10] = 1
+
+	_, err := svc.JoinEvent(context.Background(), 9, 10)
+	require.ErrorIs(t, err, events.ErrEventNotFound)
+
+	pe, err := svc.JoinEvent(context.Background(), 2, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), pe.PlayerID)
+}
+
 func TestPlayerEventAcceptInviteMissing(t *testing.T) {
 	playerEvents := newJoinAwarePlayerEventRepo()
-	svc := events.NewPlayerEventService(playerEvents, newFakeEventRepo())
+	svc := events.NewPlayerEventService(playerEvents, newFakeEventRepo(), nil)
 	playerEvents.capacity[3] = 4
 
 	_, err := svc.UpdateStatus(context.Background(), 2, 3, "accepted")

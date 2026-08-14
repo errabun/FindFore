@@ -22,6 +22,7 @@ vi.mock('../../adapters/api/groupAdapter', () => ({
     declineInvitation: vi.fn(),
     listPosts: vi.fn(),
     createPost: vi.fn(),
+    listEvents: vi.fn(),
   },
 }));
 
@@ -46,6 +47,7 @@ beforeEach(() => {
   mocked.listJoinRequests.mockResolvedValue([]);
   mocked.listGroupInvitations.mockResolvedValue([]);
   mocked.listPosts.mockResolvedValue([]);
+  mocked.listEvents.mockResolvedValue([]);
 });
 
 describe('GroupsPage', () => {
@@ -126,7 +128,16 @@ describe('GroupDetailPage', () => {
     expect(await screen.findByRole('tab', { name: /settings/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /members/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /activity/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /rounds/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/share with the group/i)).toBeInTheDocument();
     expect(screen.getByText(/no posts yet/i)).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: /rounds/i }));
+    expect(await screen.findByText(/no upcoming rounds/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /plan a round/i })[0]).toHaveAttribute(
+      'href',
+      '/event-form?group=10&name=Saturday%20Morning%20Golf',
+    );
   });
 });

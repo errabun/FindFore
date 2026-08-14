@@ -6,9 +6,17 @@ interface PostResultMessageProps {
   postError: boolean;
   errorMessage?: string;
   refreshEvents: () => void;
+  successHref?: string;
+  successLabel?: string;
 }
 
-function PostResultMessage({ postError, errorMessage, refreshEvents }: PostResultMessageProps) {
+function PostResultMessage({
+  postError,
+  errorMessage,
+  refreshEvents,
+  successHref = '/dashboard',
+  successLabel = 'Back to Dashboard',
+}: PostResultMessageProps) {
   return (
     <Modal
       opened
@@ -40,8 +48,8 @@ function PostResultMessage({ postError, errorMessage, refreshEvents }: PostResul
             <Text ta='center' fw={500}>
               Congrats, your tee time has been created!
             </Text>
-            <Button component={Link} to='/dashboard' color='forest' onClick={refreshEvents}>
-              Back to Dashboard
+            <Button component={Link} to={successHref} color='forest' onClick={refreshEvents}>
+              {successLabel}
             </Button>
           </>
         )}

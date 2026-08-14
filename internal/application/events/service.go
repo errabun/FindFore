@@ -16,8 +16,9 @@ type Service struct {
 	events       port.EventRepository
 	playerEvents port.PlayerEventRepository
 	courses      port.CourseRepository
+	groups       port.GroupRepository
 }
 
-func NewService(events port.EventRepository, playerEvents port.PlayerEventRepository, courses port.CourseRepository) *Service {
-	return &Service{events: events, playerEvents: playerEvents, courses: courses}
+func NewService(events port.EventRepository, playerEvents port.PlayerEventRepository, courses port.CourseRepository, groups port.GroupRepository) *Service {
+	return &Service{events: events, playerEvents: playerEvents, courses: courses, groups: groups}
 }

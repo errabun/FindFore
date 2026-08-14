@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { courseAdapter } from '../../adapters/api/courseAdapter';
 import { teeTimeAdapter } from '../../adapters/api/teeTimeAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
@@ -31,6 +32,11 @@ interface EventFormProps {
 }
 
 function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
+  const [params] = useSearchParams();
+  const groupId = Number(params.get('group') || 0);
+  const groupName = params.get('name') || 'the group';
+  const isGroupRound = groupId > 0;
+
   const tomorrowDate = dayjs().add(1, 'day');
 
   const [date, setDate] = useState<string | null>(tomorrowDate.format('YYYY-MM-DD'));
@@ -143,9 +149,10 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
         teeTime,
         openSpots || '2',
         numHoles,
-        isPrivate,
+        isGroupRound ? true : isPrivate,
         hostId,
-        selectedFriends
+        isGroupRound ? [] : selectedFriends,
+        isGroupRound ? groupId : undefined,
       );
     } catch (err) {
       setPostError(true);
@@ -167,10 +174,12 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
           <form onSubmit={(e) => e.preventDefault()}>
             <Box mb='xl'>
               <Title order={2} style={{ color: 'var(--ff-heading)' }} ta='center'>
-                Create a Tee Time
+                {isGroupRound ? 'Plan a group round' : 'Create a Tee Time'}
               </Title>
               <Text c='dimmed' size='sm' ta='center' mt={4}>
-                Set up a round and invite your friends
+                {isGroupRound
+                  ? `This round stays in ${groupName}. Members can join from the group page.`
+                  : 'Set up a round and invite your friends'}
               </Text>
             </Box>
 
@@ -230,20 +239,22 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
                       <Radio value='9' label='9' color='forest' />
                     </Group>
                   </Radio.Group>
-                  <Radio.Group
-                    label='Public or Private'
-                    value={isPrivate ? 'private' : 'public'}
-                    onChange={(val) => setIsPrivate(val === 'private')}
-                  >
-                    <Group mt='xs'>
-                      <Radio value='public' label='Public' color='forest' />
-                      <Radio value='private' label='Private' color='forest' />
-                    </Group>
-                  </Radio.Group>
+                  {!isGroupRound && (
+                    <Radio.Group
+                      label='Public or Private'
+                      value={isPrivate ? 'private' : 'public'}
+                      onChange={(val) => setIsPrivate(val === 'private')}
+                    >
+                      <Group mt='xs'>
+                        <Radio value='public' label='Public' color='forest' />
+                        <Radio value='private' label='Private' color='forest' />
+                      </Group>
+                    </Radio.Group>
+                  )}
                 </Stack>
               </Box>
 
-              {isPrivate && (
+              {!isGroupRound && isPrivate && (
                 <Box>
                   <Text fw={600} size='sm' style={{ color: 'var(--ff-label)' }} mb='xs'>Invite Friends</Text>
                   <Stack gap='sm'>
@@ -290,7 +301,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
                 className='form-submit'
                 mt='sm'
               >
-                Create Tee Time
+                {isGroupRound ? 'Plan round' : 'Create Tee Time'}
               </Button>
             </Stack>
           </form>
@@ -301,6 +312,8 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
           postError={postError}
           errorMessage={postErrorMessage}
           refreshEvents={refreshEvents}
+          successHref={isGroupRound ? `/groups/${groupId}` : '/dashboard'}
+          successLabel={isGroupRound ? 'Back to group' : 'Back to Dashboard'}
         />
       )}
     </>

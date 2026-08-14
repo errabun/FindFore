@@ -23,6 +23,7 @@ func (s *Service) Update(ctx context.Context, actorID int64, e entity.Event, inv
 
 	e.HostID = existing.HostID
 	e.TeeTimeID = existing.TeeTimeID
+	e.GroupID = existing.GroupID
 	if err := s.applyStartsAt(ctx, &e); err != nil {
 		return nil, err
 	}

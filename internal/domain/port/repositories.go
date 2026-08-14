@@ -42,6 +42,7 @@ type EventRepository interface {
 	ListPublicIDs(ctx context.Context) ([]int64, error)
 	ListIDsByPlayerID(ctx context.Context, playerID int64) ([]int64, error)
 	ListFriendsAvailableIDs(ctx context.Context, followerID int32, playerID int64) ([]int64, error)
+	ListIDsByGroupID(ctx context.Context, groupID int64) ([]int64, error)
 	Create(ctx context.Context, e entity.Event) (int64, error)
 	CreateWithInvites(ctx context.Context, e entity.Event, invitees []int64) (int64, error)
 	Update(ctx context.Context, e entity.Event) error

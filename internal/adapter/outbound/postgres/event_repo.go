@@ -43,6 +43,7 @@ func (r *EventRepo) GetByID(ctx context.Context, id int64) (*entity.Event, error
 		CourseID:        int32(row.CourseID),
 		PlannedStartsAt: row.PlannedStartsAt,
 		TeeTimeID:       teeTimeIDPtr(row.TeeTimeID),
+		GroupID:         teeTimeIDPtr(row.GroupID),
 		OpenSpots:       row.OpenSpots.Int32,
 		NumberOfHoles:   row.NumberOfHoles.String,
 		Private:         row.Private.Bool,
@@ -61,6 +62,7 @@ func (r *EventRepo) GetDetailsByID(ctx context.Context, id int64) (*entity.Event
 		CourseTimezone:  row.CourseTimezone.String,
 		PlannedStartsAt: row.PlannedStartsAt,
 		TeeTimeID:       teeTimeIDPtr(row.TeeTimeID),
+		GroupID:         teeTimeIDPtr(row.GroupID),
 		OpenSpots:       row.OpenSpots.Int32,
 		NumberOfHoles:   row.NumberOfHoles.String,
 		Private:         row.Private.Bool,
@@ -112,6 +114,10 @@ func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int3
 	})
 }
 
+func (r *EventRepo) ListIDsByGroupID(ctx context.Context, groupID int64) ([]int64, error) {
+	return r.q.ListGroupEventIDs(ctx, sql.NullInt64{Int64: groupID, Valid: true})
+}
+
 func createEventParams(e entity.Event) sqlcgen.CreateEventParams {
 	return sqlcgen.CreateEventParams{
 		CourseID:        int64(e.CourseID),
@@ -121,6 +127,7 @@ func createEventParams(e entity.Event) sqlcgen.CreateEventParams {
 		HostID:          int64(e.HostID),
 		PlannedStartsAt: e.PlannedStartsAt,
 		TeeTimeID:       nullTeeTimeID(e.TeeTimeID),
+		GroupID:         nullTeeTimeID(e.GroupID),
 	}
 }
 

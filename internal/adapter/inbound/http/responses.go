@@ -38,6 +38,7 @@ type EventResponse struct {
 	Pending        []int64 `json:"pending"`
 	Closed         []int64 `json:"closed"`
 	RemainingSpots int32   `json:"remaining_spots"`
+	GroupID        *int64  `json:"group_id,omitempty"`
 }
 
 type PlayerResponse struct {

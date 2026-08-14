@@ -63,15 +63,21 @@ func containsPlayer(ids []int64, playerID int64) bool {
 	return false
 }
 
-func (s *Service) canView(details *entity.EventWithDetails, viewerID int64) bool {
+func (s *Service) canView(ctx context.Context, details *entity.EventWithDetails, viewerID int64) bool {
 	if !details.Private {
 		return true
 	}
 	if int64(details.HostID) == viewerID {
 		return true
 	}
-	return containsPlayer(details.Accepted, viewerID) ||
+	if containsPlayer(details.Accepted, viewerID) ||
 		containsPlayer(details.Pending, viewerID) ||
 		containsPlayer(details.Declined, viewerID) ||
-		containsPlayer(details.Closed, viewerID)
+		containsPlayer(details.Closed, viewerID) {
+		return true
+	}
+	if details.GroupID != nil {
+		return requireActiveGroupMember(ctx, s.groups, *details.GroupID, viewerID) == nil
+	}
+	return false
 }

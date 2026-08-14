@@ -45,6 +45,7 @@ func mapEventToResponse(e entity.EventWithDetails) EventResponse {
 		Pending:        pending,
 		Closed:         closed,
 		RemainingSpots: e.RemainingSpots,
+		GroupID:        e.GroupID,
 	}
 }
 
@@ -137,6 +138,7 @@ type createEventRequest struct {
 	Private       bool        `json:"private"`
 	HostID        int64       `json:"host_id"` // ignored; host is the authenticated player
 	Invitees      []int64     `json:"invitees"`
+	GroupID       *int64      `json:"group_id"`
 }
 
 func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -190,10 +192,18 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		Private:       req.Private,
 		HostID:        int32(actorID),
 	}
+	if req.GroupID != nil && *req.GroupID > 0 {
+		e.GroupID = req.GroupID
+	}
 
 	event, err := h.events.Create(r.Context(), e, req.Invitees)
 	if err != nil {
-		respondInternalError(w, r, err, "Failed to create event")
+		status, code, msg := eventErrorStatus(err)
+		if status == http.StatusInternalServerError {
+			respondInternalError(w, r, err, "Failed to create event")
+			return
+		}
+		respondLoggedError(w, r, status, code, msg, err)
 		return
 	}
 
@@ -303,16 +313,42 @@ func (h *Handler) ListFriendsEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, err := h.events.ListFriendsEvents(r.Context(), actorID)
+	listed, err := h.events.ListFriendsEvents(r.Context(), actorID)
 	if err != nil {
 		respondInternalError(w, r, err, "Failed to fetch friends events")
 		return
 	}
 
-	resp := make([]EventResponse, 0, len(events))
-	for _, e := range events {
+	resp := make([]EventResponse, 0, len(listed))
+	for _, e := range listed {
 		resp = append(resp, mapEventToResponse(e))
 	}
 
 	respondJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) ListGroupEvents(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+
+	listed, err := h.events.ListForGroup(r.Context(), actorID, id)
+	if err != nil {
+		status, code, msg := eventErrorStatus(err)
+		respondLoggedError(w, r, status, code, msg, err)
+		return
+	}
+
+	resp := make([]EventResponse, 0, len(listed))
+	for _, e := range listed {
+		resp = append(resp, mapEventToResponse(e))
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"events": resp})
 }

@@ -20,6 +20,7 @@ export const teeTimeAdapter: TeeTimePort = {
     isPrivate: boolean,
     hostId: number,
     selectedFriends: number[],
+    groupId?: number,
   ): Promise<Event> | undefined {
     if (!courseId || !teeTime) return undefined;
     return request<Event>(endpoints.singleEvent, {
@@ -33,6 +34,7 @@ export const teeTimeAdapter: TeeTimePort = {
         private: isPrivate,
         host_id: hostId,
         invitees: selectedFriends,
+        ...(groupId ? { group_id: groupId } : {}),
       }),
     });
   },

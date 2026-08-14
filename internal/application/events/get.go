@@ -11,7 +11,7 @@ func (s *Service) Get(ctx context.Context, id, viewerID int64) (*entity.EventWit
 	if err != nil {
 		return nil, err
 	}
-	if !s.canView(details, viewerID) {
+	if !s.canView(ctx, details, viewerID) {
 		return nil, ErrEventNotFound
 	}
 	return details, nil

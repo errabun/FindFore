@@ -1,5 +1,6 @@
 import type { GroupInvitation, GroupMember, GroupSummary } from '../domain/group/types';
 import type { Post } from '../domain/social/types';
+import type { Event } from '../domain/teeTime/types';
 
 export interface GroupPort {
   listMine(): Promise<GroupSummary[]>;
@@ -24,4 +25,5 @@ export interface GroupPort {
   denyJoinRequest(groupId: number, playerId: number): Promise<void>;
   listPosts(groupId: number): Promise<Post[]>;
   createPost(groupId: number, body: string): Promise<Post>;
+  listEvents(groupId: number): Promise<Event[]>;
 }
