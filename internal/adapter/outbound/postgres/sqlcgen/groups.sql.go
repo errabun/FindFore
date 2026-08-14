@@ -25,6 +25,16 @@ func (q *Queries) CountActiveGroupMembers(ctx context.Context, groupID int64) (i
 	return column_1, err
 }
 
+const deleteGroup = `-- name: DeleteGroup :exec
+DELETE FROM groups
+WHERE id = $1
+`
+
+func (q *Queries) DeleteGroup(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteGroup, id)
+	return err
+}
+
 const deleteGroupMembership = `-- name: DeleteGroupMembership :exec
 DELETE FROM group_memberships
 WHERE group_id = $1
@@ -408,6 +418,69 @@ func (q *Queries) ListGroupsByPlayer(ctx context.Context, arg ListGroupsByPlayer
 	return items, nil
 }
 
+const listOutstandingGroupInvitations = `-- name: ListOutstandingGroupInvitations :many
+SELECT i.id, i.group_id, i.inviter_player_id, i.invitee_player_id,
+       i.created_at, i.expires_at, i.accepted_at, i.declined_at,
+       g.name AS group_name, inviter.name AS inviter_name, invitee.name AS invitee_name
+FROM group_invitations i
+INNER JOIN groups g ON g.id = i.group_id
+INNER JOIN players inviter ON inviter.id = i.inviter_player_id
+INNER JOIN players invitee ON invitee.id = i.invitee_player_id
+WHERE i.group_id = $1
+  AND i.accepted_at IS NULL
+  AND i.declined_at IS NULL
+ORDER BY i.created_at DESC, i.id DESC
+`
+
+type ListOutstandingGroupInvitationsRow struct {
+	ID              int64
+	GroupID         int64
+	InviterPlayerID int64
+	InviteePlayerID int64
+	CreatedAt       time.Time
+	ExpiresAt       sql.NullTime
+	AcceptedAt      sql.NullTime
+	DeclinedAt      sql.NullTime
+	GroupName       string
+	InviterName     sql.NullString
+	InviteeName     sql.NullString
+}
+
+func (q *Queries) ListOutstandingGroupInvitations(ctx context.Context, groupID int64) ([]ListOutstandingGroupInvitationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOutstandingGroupInvitations, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOutstandingGroupInvitationsRow
+	for rows.Next() {
+		var i ListOutstandingGroupInvitationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.InviterPlayerID,
+			&i.InviteePlayerID,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.AcceptedAt,
+			&i.DeclinedAt,
+			&i.GroupName,
+			&i.InviterName,
+			&i.InviteeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingGroupMembers = `-- name: ListPendingGroupMembers :many
 SELECT m.group_id, m.player_id, m.role, m.status, m.created_at, m.updated_at, p.name AS player_name
 FROM group_memberships m
@@ -625,4 +698,21 @@ func (q *Queries) UpdateGroupMembership(ctx context.Context, arg UpdateGroupMemb
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateGroupOwner = `-- name: UpdateGroupOwner :exec
+UPDATE groups
+SET owner_player_id = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateGroupOwnerParams struct {
+	ID            int64
+	OwnerPlayerID int64
+}
+
+func (q *Queries) UpdateGroupOwner(ctx context.Context, arg UpdateGroupOwnerParams) error {
+	_, err := q.db.ExecContext(ctx, updateGroupOwner, arg.ID, arg.OwnerPlayerID)
+	return err
 }

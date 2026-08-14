@@ -45,6 +45,7 @@ type groupInvitationResponse struct {
 	InviterID   int64  `json:"inviter_player_id"`
 	InviterName string `json:"inviter_name,omitempty"`
 	InviteeID   int64  `json:"invitee_player_id"`
+	InviteeName string `json:"invitee_name,omitempty"`
 	ExpiresAt   string `json:"expires_at,omitempty"`
 }
 
@@ -79,11 +80,11 @@ func mapMembership(m *entity.GroupMembership) groupMemberResponse {
 	}
 }
 
-func mapInvitation(inv *entity.GroupInvitation, groupName, inviterName string) groupInvitationResponse {
+func mapInvitation(inv *entity.GroupInvitation, groupName, inviterName, inviteeName string) groupInvitationResponse {
 	out := groupInvitationResponse{
 		ID: inv.ID, GroupID: inv.GroupID, GroupName: groupName,
 		InviterID: inv.InviterPlayerID, InviterName: inviterName,
-		InviteeID: inv.InviteePlayerID,
+		InviteeID: inv.InviteePlayerID, InviteeName: inviteeName,
 	}
 	if inv.ExpiresAt != nil {
 		out.ExpiresAt = inv.ExpiresAt.UTC().Format(time.RFC3339)
@@ -369,7 +370,7 @@ func (h *Handler) InviteToGroup(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]any{"status": "active"})
 		return
 	}
-	respondJSON(w, http.StatusCreated, mapInvitation(inv, "", ""))
+	respondJSON(w, http.StatusCreated, mapInvitation(inv, "", "", ""))
 }
 
 func (h *Handler) ListJoinRequests(w http.ResponseWriter, r *http.Request) {
@@ -441,6 +442,106 @@ func (h *Handler) mutateJoinRequest(w http.ResponseWriter, r *http.Request, appr
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+	if !h.requireGroups(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	if err := h.groups.Delete(r.Context(), actorID, id); err != nil {
+		writeGroupError(w, r, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (h *Handler) TransferGroupOwnership(w http.ResponseWriter, r *http.Request) {
+	if !h.requireGroups(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	var req inviteGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PlayerID <= 0 {
+		respondError(w, http.StatusBadRequest, "validation_error", "player_id is required")
+		return
+	}
+	d, err := h.groups.TransferOwnership(r.Context(), actorID, id, req.PlayerID)
+	if err != nil {
+		writeGroupError(w, r, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, mapGroupDetails(d))
+}
+
+func (h *Handler) ListGroupInvitations(w http.ResponseWriter, r *http.Request) {
+	if !h.requireGroups(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	rows, err := h.groups.ListGroupInvitations(r.Context(), actorID, id)
+	if err != nil {
+		writeGroupError(w, r, err)
+		return
+	}
+	items := make([]groupInvitationResponse, len(rows))
+	for i, row := range rows {
+		items[i] = mapInvitation(&row.Invitation, row.GroupName, row.InviterName, row.InviteeName)
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"invitations": items})
+}
+
+func (h *Handler) CancelGroupInvitation(w http.ResponseWriter, r *http.Request) {
+	if !h.requireGroups(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	invitationID, ok := parseIDParam(r, "invitationId")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid invitation id")
+		return
+	}
+	if err := h.groups.CancelInvitation(r.Context(), actorID, id, invitationID); err != nil {
+		writeGroupError(w, r, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *Handler) ListMyGroupInvitations(w http.ResponseWriter, r *http.Request) {
 	if !h.requireGroups(w) {
 		return
@@ -457,7 +558,7 @@ func (h *Handler) ListMyGroupInvitations(w http.ResponseWriter, r *http.Request)
 	}
 	items := make([]groupInvitationResponse, len(rows))
 	for i, row := range rows {
-		items[i] = mapInvitation(&row.Invitation, row.GroupName, row.InviterName)
+		items[i] = mapInvitation(&row.Invitation, row.GroupName, row.InviterName, row.InviteeName)
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"invitations": items})
 }

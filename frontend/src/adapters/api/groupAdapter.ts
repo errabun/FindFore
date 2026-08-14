@@ -2,14 +2,18 @@ import type { GroupInvitation, GroupMember, GroupSummary } from '../../domain/gr
 import type { GroupPort } from '../../ports/groupPort';
 import { endpoints, request, requestVoid } from './httpClient';
 
+const DISCOVER_LIMIT = 20;
+
 export const groupAdapter: GroupPort = {
   async listMine() {
     const body = await request<{ groups: GroupSummary[] }>(`${endpoints.groups}?mine=1`);
     return body.groups ?? [];
   },
-  async listDiscover(search = '') {
-    const q = search ? `&search=${encodeURIComponent(search)}` : '';
-    const body = await request<{ groups: GroupSummary[] }>(`${endpoints.groups}?limit=20${q}`);
+  async listDiscover(search = '', offset = 0) {
+    const params = new URLSearchParams({ limit: String(DISCOVER_LIMIT) });
+    if (search) params.set('search', search);
+    if (offset) params.set('offset', String(offset));
+    const body = await request<{ groups: GroupSummary[] }>(`${endpoints.groups}?${params.toString()}`);
     return body.groups ?? [];
   },
   get(id) {
@@ -25,6 +29,15 @@ export const groupAdapter: GroupPort = {
     return request<GroupSummary>(`${endpoints.groups}/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ name, description, privacy }),
+    });
+  },
+  delete(id) {
+    return requestVoid(`${endpoints.groups}/${id}`, { method: 'DELETE' });
+  },
+  transferOwnership(groupId, playerId) {
+    return request<GroupSummary>(`${endpoints.groups}/${groupId}/transfer-ownership`, {
+      method: 'POST',
+      body: JSON.stringify({ player_id: playerId }),
     });
   },
   join(id) {
@@ -44,6 +57,17 @@ export const groupAdapter: GroupPort = {
     return request(`${endpoints.groups}/${groupId}/invitations`, {
       method: 'POST',
       body: JSON.stringify({ player_id: playerId }),
+    });
+  },
+  async listGroupInvitations(groupId) {
+    const body = await request<{ invitations: GroupInvitation[] }>(
+      `${endpoints.groups}/${groupId}/invitations`,
+    );
+    return body.invitations ?? [];
+  },
+  cancelInvitation(groupId, invitationId) {
+    return requestVoid(`${endpoints.groups}/${groupId}/invitations/${invitationId}`, {
+      method: 'DELETE',
     });
   },
   async listInvitations() {

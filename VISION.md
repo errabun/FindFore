@@ -206,7 +206,8 @@ Build toward the full vision from day one — architectural decisions should not
 | Course search | ✅ Built (Golf Course API integration) |
 | Tee time creation & coordination | ✅ Built (private/public, invite, accept/decline/join) |
 | Community feed | ✅ Built (posts, reactions, replies) |
-| Tee time booking via provider (e.g., Lightspeed) | 🔲 Not started |
+| Golf groups | ✅ Built (create, join, invite, settings) |
+| Tee time booking via provider | 🔲 Waiting on provider API access |
 | Group chat | 🔲 Not started |
 | Notifications | 🔲 Not started |
 | Google Identity auth | 🔲 Not started |

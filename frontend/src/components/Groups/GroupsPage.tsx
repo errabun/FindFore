@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Alert,
   Badge,
   Button,
   Card,
   Container,
   Group,
+  Skeleton,
   Stack,
   Text,
   TextInput,
   Title,
 } from '@mantine/core';
-import { FiPlus, FiUsers } from 'react-icons/fi';
+import { useDebouncedValue } from '@mantine/hooks';
+import { FiAlertCircle, FiPlus, FiSearch, FiUsers } from 'react-icons/fi';
 import EmptyState from '../EmptyState/EmptyState';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
+import { ApiError } from '../../adapters/api/httpClient';
 import { useGroups } from '../../hooks/useGroups';
 import type { GroupInvitation, GroupSummary } from '../../domain/group/types';
 
@@ -22,6 +26,7 @@ interface GroupsPageProps {
 }
 
 function GroupCard({ group }: { group: GroupSummary }) {
+  const joined = group.viewer_membership?.status === 'active';
   return (
     <Card
       component={Link}
@@ -29,13 +34,14 @@ function GroupCard({ group }: { group: GroupSummary }) {
       padding='md'
       radius='md'
       withBorder
-      style={{ textDecoration: 'none', color: 'inherit' }}
+      style={{ textDecoration: 'none', color: 'inherit', minHeight: 44 }}
     >
       <Group justify='space-between' wrap='nowrap'>
         <div>
           <Text fw={600}>{group.name}</Text>
           <Text size='sm' c='dimmed'>
             {group.member_count} {group.member_count === 1 ? 'member' : 'members'}
+            {joined ? ' · Joined' : ''}
           </Text>
         </div>
         <Badge variant='light' color={group.privacy === 'public' ? 'teal' : 'gray'}>
@@ -47,19 +53,44 @@ function GroupCard({ group }: { group: GroupSummary }) {
 }
 
 export default function GroupsPage({ hostPlayer }: GroupsPageProps) {
-  const { mine, discover, invitations, loading, refresh, setDiscover } = useGroups(hostPlayer);
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebouncedValue(search, 300);
+  const {
+    mine,
+    discover,
+    discoverHasMore,
+    invitations,
+    loading,
+    error,
+    refresh,
+    loadMoreDiscover,
+  } = useGroups(hostPlayer, debouncedSearch);
+  const [actionError, setActionError] = useState('');
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  const onSearch = (value: string) => {
-    setSearch(value);
-    groupAdapter.listDiscover(value).then(setDiscover).catch(() => undefined);
+  const accept = async (inv: GroupInvitation) => {
+    setBusyId(inv.id);
+    setActionError('');
+    try {
+      await groupAdapter.acceptInvitation(inv.id);
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Could not accept invitation');
+    } finally {
+      setBusyId(null);
+    }
   };
-
-  const accept = (inv: GroupInvitation) => {
-    groupAdapter.acceptInvitation(inv.id).then(() => refresh());
-  };
-  const decline = (inv: GroupInvitation) => {
-    groupAdapter.declineInvitation(inv.id).then(() => refresh());
+  const decline = async (inv: GroupInvitation) => {
+    setBusyId(inv.id);
+    setActionError('');
+    try {
+      await groupAdapter.declineInvitation(inv.id);
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Could not decline invitation');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -71,11 +102,17 @@ export default function GroupsPage({ hostPlayer }: GroupsPageProps) {
           to='/groups/new'
           color='forest'
           leftSection={<FiPlus />}
-          size='sm'
+          size='md'
         >
           New
         </Button>
       </Group>
+
+      {(error || actionError) && (
+        <Alert color='red' icon={<FiAlertCircle />} mb='md'>
+          {actionError || error}
+        </Alert>
+      )}
 
       {invitations.length > 0 && (
         <Stack gap='sm' mb='xl'>
@@ -86,10 +123,21 @@ export default function GroupsPage({ hostPlayer }: GroupsPageProps) {
                 {inv.inviter_name} invited you to {inv.group_name}
               </Text>
               <Group>
-                <Button size='xs' color='forest' onClick={() => accept(inv)}>
+                <Button
+                  size='sm'
+                  color='forest'
+                  loading={busyId === inv.id}
+                  onClick={() => accept(inv)}
+                >
                   Accept
                 </Button>
-                <Button size='xs' variant='light' color='gray' onClick={() => decline(inv)}>
+                <Button
+                  size='sm'
+                  variant='light'
+                  color='gray'
+                  disabled={busyId === inv.id}
+                  onClick={() => decline(inv)}
+                >
                   Decline
                 </Button>
               </Group>
@@ -101,7 +149,12 @@ export default function GroupsPage({ hostPlayer }: GroupsPageProps) {
       <Text fw={600} mb='sm'>
         My Groups
       </Text>
-      {mine.length === 0 && !loading ? (
+      {loading && mine.length === 0 ? (
+        <Stack gap='sm' mb='xl'>
+          <Skeleton height={64} radius='md' />
+          <Skeleton height={64} radius='md' />
+        </Stack>
+      ) : mine.length === 0 ? (
         <EmptyState
           icon={<FiUsers />}
           title='No groups yet'
@@ -121,16 +174,35 @@ export default function GroupsPage({ hostPlayer }: GroupsPageProps) {
         Discover Groups
       </Text>
       <TextInput
-        placeholder='Search groups...'
+        placeholder='Search public groups'
+        aria-label='Search public groups'
+        leftSection={<FiSearch />}
         value={search}
-        onChange={(e) => onSearch(e.currentTarget.value)}
+        onChange={(e) => setSearch(e.currentTarget.value)}
         mb='sm'
       />
-      <Stack gap='sm'>
-        {discover.map((g) => (
-          <GroupCard key={g.id} group={g} />
-        ))}
-      </Stack>
+      {discover.length === 0 && !loading ? (
+        <EmptyState
+          icon={<FiUsers />}
+          title={search ? 'No matching groups' : 'No public groups yet'}
+          description={
+            search
+              ? 'Try a different name, or create your own group.'
+              : 'Be the first to start a public group.'
+          }
+        />
+      ) : (
+        <Stack gap='sm'>
+          {discover.map((g) => (
+            <GroupCard key={g.id} group={g} />
+          ))}
+          {discoverHasMore && (
+            <Button variant='light' color='forest' onClick={() => loadMoreDiscover()}>
+              Load more
+            </Button>
+          )}
+        </Stack>
+      )}
     </Container>
   );
 }

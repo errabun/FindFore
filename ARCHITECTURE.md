@@ -213,7 +213,7 @@ Unknown provider outcome → `503` + `provider_outcome_unknown` (retry same `Ide
 
 ### HTTP groups API
 
-Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Owner cannot leave in v1.
+Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Owner cannot leave until ownership is transferred.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -222,17 +222,21 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 | `GET` | `/groups?search=` | Discover **public** groups (`limit`/`offset`) |
 | `GET` | `/groups/{id}` | Details + `viewer_membership` + `member_count` |
 | `PATCH` | `/groups/{id}` | Owner/admin |
+| `DELETE` | `/groups/{id}` | Owner only; cascade memberships and invitations |
 | `POST` | `/groups/{id}/join` | Public → active; private → pending; outstanding invite → accept |
 | `POST` | `/groups/{id}/leave` | Members and pending requests; owner → `409` |
+| `POST` | `/groups/{id}/transfer-ownership` | Owner only; `{player_id}` must be an active member |
 | `GET` | `/groups/{id}/members` | Active members only (active members) |
 | `DELETE` | `/groups/{id}/members/{playerId}` | Owner/admin; cannot remove owner |
 | `POST` | `/groups/{id}/invitations` | Owner/admin; `{player_id}` |
+| `GET` | `/groups/{id}/invitations` | Outstanding invites (owner/admin) |
+| `DELETE` | `/groups/{id}/invitations/{invitationId}` | Cancel outstanding invite (owner/admin) |
 | `GET` | `/groups/{id}/join-requests` | Pending requests (owner/admin) |
 | `POST` | `/groups/{id}/join-requests/{playerId}/approve\|deny` | Deny deletes pending (retry allowed) |
 | `GET` | `/group-invitations` | Outstanding invites for the actor |
 | `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |
 
-Schema: `000014` (`groups`, `group_memberships`, `group_invitations`). Join assigns `member`; never honor a client-supplied role.
+Schema: `000014` (`groups`, `group_memberships`, `group_invitations`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group.
 
 ### Twelve scenario walkthroughs
 

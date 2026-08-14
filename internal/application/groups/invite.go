@@ -90,11 +90,7 @@ func (s *Service) ListMyInvitations(ctx context.Context, actorID int64) ([]port.
 		if !row.Invitation.IsOutstanding(now) {
 			continue
 		}
-		out = append(out, port.GroupInvitationView{
-			Invitation:  row.Invitation,
-			GroupName:   row.GroupName,
-			InviterName: row.InviterName,
-		})
+		out = append(out, invitationView(row))
 	}
 	return out, nil
 }

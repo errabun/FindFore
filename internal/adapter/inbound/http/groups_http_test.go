@@ -62,6 +62,34 @@ func (f *httpFakeGroups) Update(_ context.Context, g entity.Group) (*entity.Grou
 	f.groups[g.ID] = &cp
 	return &g, nil
 }
+func (f *httpFakeGroups) Delete(_ context.Context, id int64) error {
+	delete(f.groups, id)
+	for k, m := range f.memberships {
+		if m.GroupID == id {
+			delete(f.memberships, k)
+		}
+	}
+	for k, inv := range f.invitations {
+		if inv.GroupID == id {
+			delete(f.invitations, k)
+		}
+	}
+	return nil
+}
+func (f *httpFakeGroups) TransferOwnership(_ context.Context, groupID, fromPlayerID, toPlayerID int64) error {
+	g, ok := f.groups[groupID]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	g.OwnerPlayerID = toPlayerID
+	if from, ok := f.memberships[gkey(groupID, fromPlayerID)]; ok {
+		from.Role = entity.GroupRoleMember
+	}
+	if to, ok := f.memberships[gkey(groupID, toPlayerID)]; ok {
+		to.Role = entity.GroupRoleOwner
+	}
+	return nil
+}
 func (f *httpFakeGroups) ListPublic(_ context.Context, _ string, _, _ int32) ([]entity.Group, error) {
 	var out []entity.Group
 	for _, g := range f.groups {
@@ -165,6 +193,21 @@ func (f *httpFakeGroups) ListInvitationsByInvitee(_ context.Context, inviteeID i
 	}
 	return out, nil
 }
+func (f *httpFakeGroups) ListOutstandingInvitations(_ context.Context, groupID int64) ([]port.GroupInvitationRow, error) {
+	var out []port.GroupInvitationRow
+	for _, inv := range f.invitations {
+		if inv.GroupID == groupID && inv.AcceptedAt == nil && inv.DeclinedAt == nil {
+			name := ""
+			if g, ok := f.groups[inv.GroupID]; ok {
+				name = g.Name
+			}
+			out = append(out, port.GroupInvitationRow{
+				Invitation: *inv, GroupName: name, InviterName: "Eric", InviteeName: "Player",
+			})
+		}
+	}
+	return out, nil
+}
 func (f *httpFakeGroups) InsertInvitation(_ context.Context, inv entity.GroupInvitation) (*entity.GroupInvitation, error) {
 	inv.ID = f.nextInvite
 	f.nextInvite++
@@ -234,9 +277,9 @@ func TestGroupsHTTPCreateAndOwnerMembership(t *testing.T) {
 	rec := e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Saturday Morning Golf","privacy":"public"}`, 1)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	var g struct {
-		ID            int64 `json:"id"`
-		MemberCount   int64 `json:"member_count"`
-		Viewer        *struct {
+		ID          int64 `json:"id"`
+		MemberCount int64 `json:"member_count"`
+		Viewer      *struct {
 			Role   string `json:"role"`
 			Status string `json:"status"`
 		} `json:"viewer_membership"`
@@ -326,4 +369,48 @@ func TestGroupsHTTPOwnerCannotLeave(t *testing.T) {
 	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
 	rec := e.do(t, http.MethodPost, "/api/v1/groups/1/leave", "", 1)
 	require.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestGroupsHTTPMemberCannotDelete(t *testing.T) {
+	e := newGroupsHTTPEnv(t)
+	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
+	e.do(t, http.MethodPost, "/api/v1/groups/1/join", "", 2)
+	rec := e.do(t, http.MethodDelete, "/api/v1/groups/1", "", 2)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestGroupsHTTPTransferThenLeave(t *testing.T) {
+	e := newGroupsHTTPEnv(t)
+	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"public"}`, 1)
+	e.do(t, http.MethodPost, "/api/v1/groups/1/join", "", 2)
+	rec := e.do(t, http.MethodPost, "/api/v1/groups/1/transfer-ownership", `{"player_id":2}`, 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = e.do(t, http.MethodPost, "/api/v1/groups/1/leave", "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestGroupsHTTPCancelInvitation(t *testing.T) {
+	e := newGroupsHTTPEnv(t)
+	e.do(t, http.MethodPost, "/api/v1/groups", `{"name":"Crew","privacy":"private"}`, 1)
+	rec := e.do(t, http.MethodPost, "/api/v1/groups/1/invitations", `{"player_id":2}`, 1)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var inv struct {
+		ID int64 `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &inv))
+
+	rec = e.do(t, http.MethodGet, "/api/v1/groups/1/invitations", "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = e.do(t, http.MethodGet, "/api/v1/groups/1/invitations", "", 2)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+
+	rec = e.do(t, http.MethodDelete, fmt.Sprintf("/api/v1/groups/1/invitations/%d", inv.ID), "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = e.do(t, http.MethodGet, "/api/v1/groups/1/invitations", "", 1)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body struct {
+		Invitations []any `json:"invitations"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Empty(t, body.Invitations)
 }

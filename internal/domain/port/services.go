@@ -117,6 +117,7 @@ type GroupInvitationView struct {
 	Invitation  entity.GroupInvitation
 	GroupName   string
 	InviterName string
+	InviteeName string
 }
 
 type CreateGroupInput struct {
@@ -146,8 +147,12 @@ type GroupService interface {
 	RemoveMember(ctx context.Context, actorID, groupID, playerID int64) error
 	Invite(ctx context.Context, actorID, groupID, inviteeID int64) (*entity.GroupInvitation, error)
 	ListMyInvitations(ctx context.Context, actorID int64) ([]GroupInvitationView, error)
+	ListGroupInvitations(ctx context.Context, actorID, groupID int64) ([]GroupInvitationView, error)
+	CancelInvitation(ctx context.Context, actorID, groupID, invitationID int64) error
 	AcceptInvitation(ctx context.Context, actorID, invitationID int64) (*entity.GroupMembership, error)
 	DeclineInvitation(ctx context.Context, actorID, invitationID int64) error
+	TransferOwnership(ctx context.Context, actorID, groupID, newOwnerID int64) (*GroupDetails, error)
+	Delete(ctx context.Context, actorID, groupID int64) error
 	ListJoinRequests(ctx context.Context, actorID, groupID int64) ([]GroupMember, error)
 	ApproveJoinRequest(ctx context.Context, actorID, groupID, playerID int64) (*entity.GroupMembership, error)
 	DenyJoinRequest(ctx context.Context, actorID, groupID, playerID int64) error

@@ -130,12 +130,15 @@ type GroupInvitationRow struct {
 	Invitation  entity.GroupInvitation
 	GroupName   string
 	InviterName string
+	InviteeName string
 }
 
 type GroupRepository interface {
 	GetByID(ctx context.Context, id int64) (*entity.Group, error)
 	CreateWithOwner(ctx context.Context, g entity.Group) (*entity.Group, error)
 	Update(ctx context.Context, g entity.Group) (*entity.Group, error)
+	Delete(ctx context.Context, id int64) error
+	TransferOwnership(ctx context.Context, groupID, fromPlayerID, toPlayerID int64) error
 	ListPublic(ctx context.Context, search string, limit, offset int32) ([]entity.Group, error)
 	ListByPlayer(ctx context.Context, playerID int64, limit, offset int32) ([]entity.Group, error)
 	CountActiveMembers(ctx context.Context, groupID int64) (int64, error)
@@ -150,6 +153,7 @@ type GroupRepository interface {
 	GetInvitationByID(ctx context.Context, id int64) (*entity.GroupInvitation, error)
 	GetOutstandingInvitation(ctx context.Context, groupID, inviteeID int64) (*entity.GroupInvitation, error)
 	ListInvitationsByInvitee(ctx context.Context, inviteeID int64) ([]GroupInvitationRow, error)
+	ListOutstandingInvitations(ctx context.Context, groupID int64) ([]GroupInvitationRow, error)
 	InsertInvitation(ctx context.Context, inv entity.GroupInvitation) (*entity.GroupInvitation, error)
 	MarkInvitationAccepted(ctx context.Context, id int64) (*entity.GroupInvitation, error)
 	MarkInvitationDeclined(ctx context.Context, id int64) (*entity.GroupInvitation, error)

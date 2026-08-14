@@ -1,4 +1,5 @@
 import { Stack, ThemeIcon, Text, Button } from '@mantine/core';
+import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
 interface EmptyStateProps {
@@ -20,14 +21,23 @@ const EmptyState = ({ icon, title, description, actionLabel, onAction, actionHre
         <Text fw={600} size='sm' mb={4}>{title}</Text>
         <Text c='dimmed' size='sm'>{description}</Text>
       </div>
-      {actionLabel && (onAction || actionHref) && (
+      {actionLabel && actionHref && (
+        <Button
+          variant='light'
+          color='forest'
+          size='sm'
+          component={Link}
+          to={actionHref}
+        >
+          {actionLabel}
+        </Button>
+      )}
+      {actionLabel && onAction && !actionHref && (
         <Button
           variant='light'
           color='forest'
           size='sm'
           onClick={onAction}
-          component={actionHref ? 'a' : 'button'}
-          {...(actionHref ? { href: actionHref } : {})}
         >
           {actionLabel}
         </Button>

@@ -46,18 +46,20 @@ func (f *fakePlayers) Create(context.Context, entity.Player) (*entity.Player, er
 func (f *fakePlayers) Update(context.Context, entity.Player) (*entity.Player, error) {
 	return nil, sql.ErrNoRows
 }
-func (f *fakePlayers) GetPasswordByID(context.Context, int64) (string, error) { return "", sql.ErrNoRows }
-func (f *fakePlayers) UpdatePassword(context.Context, int64, string) error    { return sql.ErrNoRows }
-func (f *fakePlayers) GetTokenVersion(context.Context, int64) (int32, error)  { return 0, nil }
-func (f *fakePlayers) ListIDsExcept(context.Context, int64) ([]int64, error)  { return nil, nil }
+func (f *fakePlayers) GetPasswordByID(context.Context, int64) (string, error) {
+	return "", sql.ErrNoRows
+}
+func (f *fakePlayers) UpdatePassword(context.Context, int64, string) error   { return sql.ErrNoRows }
+func (f *fakePlayers) GetTokenVersion(context.Context, int64) (int32, error) { return 0, nil }
+func (f *fakePlayers) ListIDsExcept(context.Context, int64) ([]int64, error) { return nil, nil }
 
 type fakeGroups struct {
-	groups       map[int64]*entity.Group
-	memberships  map[string]*entity.GroupMembership
-	invitations  map[int64]*entity.GroupInvitation
-	nextGroup    int64
-	nextInvite   int64
-	playerNames  map[int64]string
+	groups      map[int64]*entity.Group
+	memberships map[string]*entity.GroupMembership
+	invitations map[int64]*entity.GroupInvitation
+	nextGroup   int64
+	nextInvite  int64
+	playerNames map[int64]string
 }
 
 func newFakeGroups() *fakeGroups {
@@ -123,6 +125,36 @@ func (f *fakeGroups) Update(_ context.Context, g entity.Group) (*entity.Group, e
 	cp := g
 	f.groups[g.ID] = &cp
 	return &g, nil
+}
+
+func (f *fakeGroups) Delete(_ context.Context, id int64) error {
+	delete(f.groups, id)
+	for k, m := range f.memberships {
+		if m.GroupID == id {
+			delete(f.memberships, k)
+		}
+	}
+	for k, inv := range f.invitations {
+		if inv.GroupID == id {
+			delete(f.invitations, k)
+		}
+	}
+	return nil
+}
+
+func (f *fakeGroups) TransferOwnership(_ context.Context, groupID, fromPlayerID, toPlayerID int64) error {
+	g, ok := f.groups[groupID]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	g.OwnerPlayerID = toPlayerID
+	if from, ok := f.memberships[memKey(groupID, fromPlayerID)]; ok {
+		from.Role = entity.GroupRoleMember
+	}
+	if to, ok := f.memberships[memKey(groupID, toPlayerID)]; ok {
+		to.Role = entity.GroupRoleOwner
+	}
+	return nil
 }
 
 func (f *fakeGroups) ListPublic(_ context.Context, search string, limit, offset int32) ([]entity.Group, error) {
@@ -250,6 +282,23 @@ func (f *fakeGroups) ListInvitationsByInvitee(_ context.Context, inviteeID int64
 				name = g.Name
 			}
 			out = append(out, port.GroupInvitationRow{Invitation: *inv, GroupName: name, InviterName: "Owner"})
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeGroups) ListOutstandingInvitations(_ context.Context, groupID int64) ([]port.GroupInvitationRow, error) {
+	var out []port.GroupInvitationRow
+	for _, inv := range f.invitations {
+		if inv.GroupID == groupID && inv.AcceptedAt == nil && inv.DeclinedAt == nil {
+			name := ""
+			if g, ok := f.groups[inv.GroupID]; ok {
+				name = g.Name
+			}
+			out = append(out, port.GroupInvitationRow{
+				Invitation: *inv, GroupName: name, InviterName: "Owner",
+				InviteeName: f.playerNames[inv.InviteePlayerID],
+			})
 		}
 	}
 	return out, nil
@@ -484,6 +533,97 @@ func TestDeclineInvitation(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.DeclineInvitation(context.Background(), 2, inv.ID))
 	require.NoError(t, svc.DeclineInvitation(context.Background(), 2, inv.ID))
+}
+
+func TestCancelInvitation(t *testing.T) {
+	svc, _ := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	inv, err := svc.Invite(context.Background(), 1, d.Group.ID, 2)
+	require.NoError(t, err)
+
+	listed, err := svc.ListGroupInvitations(context.Background(), 1, d.Group.ID)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+
+	require.NoError(t, svc.CancelInvitation(context.Background(), 1, d.Group.ID, inv.ID))
+	listed, err = svc.ListGroupInvitations(context.Background(), 1, d.Group.ID)
+	require.NoError(t, err)
+	require.Empty(t, listed)
+
+	_, err = svc.AcceptInvitation(context.Background(), 2, inv.ID)
+	require.ErrorIs(t, err, groups.ErrInvitationExpired)
+}
+
+func TestMemberCannotListInvitations(t *testing.T) {
+	svc, _ := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	_, err = svc.Join(context.Background(), 2, d.Group.ID)
+	require.NoError(t, err)
+	_, err = svc.ListGroupInvitations(context.Background(), 2, d.Group.ID)
+	require.ErrorIs(t, err, groups.ErrGroupForbidden)
+}
+
+func TestTransferOwnershipThenLeave(t *testing.T) {
+	svc, repo := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	_, err = svc.Join(context.Background(), 2, d.Group.ID)
+	require.NoError(t, err)
+
+	updated, err := svc.TransferOwnership(context.Background(), 1, d.Group.ID, 2)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), updated.Group.OwnerPlayerID)
+	require.Equal(t, entity.GroupRoleMember, updated.Viewer.Role)
+
+	require.NoError(t, svc.Leave(context.Background(), 1, d.Group.ID))
+	_, err = repo.GetMembership(context.Background(), d.Group.ID, 1)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+func TestTransferOwnershipRejectsNonMember(t *testing.T) {
+	svc, _ := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	_, err = svc.TransferOwnership(context.Background(), 1, d.Group.ID, 2)
+	require.ErrorIs(t, err, groups.ErrInvalidGroup)
+}
+
+func TestNonOwnerCannotDeleteOrTransfer(t *testing.T) {
+	svc, repo := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	_, err = svc.Join(context.Background(), 2, d.Group.ID)
+	require.NoError(t, err)
+
+	err = svc.Delete(context.Background(), 2, d.Group.ID)
+	require.ErrorIs(t, err, groups.ErrGroupForbidden)
+	_, err = svc.TransferOwnership(context.Background(), 2, d.Group.ID, 1)
+	require.ErrorIs(t, err, groups.ErrGroupForbidden)
+	_, err = repo.GetByID(context.Background(), d.Group.ID)
+	require.NoError(t, err)
+}
+
+func TestOwnerCanDelete(t *testing.T) {
+	svc, repo := newSvc()
+	d, err := svc.Create(context.Background(), port.CreateGroupInput{
+		ActorID: 1, Name: "Crew", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.Delete(context.Background(), 1, d.Group.ID))
+	_, err = repo.GetByID(context.Background(), d.Group.ID)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 func TestMemberCannotInvite(t *testing.T) {

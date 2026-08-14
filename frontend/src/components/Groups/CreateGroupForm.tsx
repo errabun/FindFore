@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Button,
   Container,
@@ -10,6 +10,7 @@ import {
   Textarea,
   Title,
 } from '@mantine/core';
+import { FiArrowLeft } from 'react-icons/fi';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
 
@@ -36,6 +37,17 @@ export default function CreateGroupForm() {
 
   return (
     <Container size='sm' py='lg'>
+      <Button
+        component={Link}
+        to='/groups'
+        variant='subtle'
+        color='gray'
+        leftSection={<FiArrowLeft />}
+        mb='md'
+        size='sm'
+      >
+        Groups
+      </Button>
       <Title order={2} mb='md'>
         Create Group
       </Title>
@@ -49,6 +61,7 @@ export default function CreateGroupForm() {
         />
         <Textarea
           label='Description'
+          description='Optional. What is this group for?'
           maxLength={1000}
           minRows={3}
           value={description}
@@ -69,7 +82,7 @@ export default function CreateGroupForm() {
             {error}
           </Text>
         )}
-        <Button color='forest' onClick={submit} loading={saving} disabled={!name.trim()}>
+        <Button color='forest' size='md' onClick={submit} loading={saving} disabled={!name.trim()}>
           Create Group
         </Button>
       </Stack>

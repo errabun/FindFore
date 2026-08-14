@@ -31,5 +31,6 @@ export interface GroupInvitation {
   inviter_player_id: number;
   inviter_name: string;
   invitee_player_id: number;
+  invitee_name?: string;
   expires_at?: string;
 }

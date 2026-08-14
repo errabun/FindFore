@@ -17,6 +17,16 @@ SET name = $2,
 WHERE id = $1
 RETURNING id, owner_player_id, name, description, privacy, created_at, updated_at;
 
+-- name: UpdateGroupOwner :exec
+UPDATE groups
+SET owner_player_id = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: DeleteGroup :exec
+DELETE FROM groups
+WHERE id = $1;
+
 -- name: ListPublicGroups :many
 SELECT id, owner_player_id, name, description, privacy, created_at, updated_at
 FROM groups
@@ -109,6 +119,19 @@ WHERE i.invitee_player_id = $1
   AND i.accepted_at IS NULL
   AND i.declined_at IS NULL
 ORDER BY i.created_at DESC;
+
+-- name: ListOutstandingGroupInvitations :many
+SELECT i.id, i.group_id, i.inviter_player_id, i.invitee_player_id,
+       i.created_at, i.expires_at, i.accepted_at, i.declined_at,
+       g.name AS group_name, inviter.name AS inviter_name, invitee.name AS invitee_name
+FROM group_invitations i
+INNER JOIN groups g ON g.id = i.group_id
+INNER JOIN players inviter ON inviter.id = i.inviter_player_id
+INNER JOIN players invitee ON invitee.id = i.invitee_player_id
+WHERE i.group_id = $1
+  AND i.accepted_at IS NULL
+  AND i.declined_at IS NULL
+ORDER BY i.created_at DESC, i.id DESC;
 
 -- name: InsertGroupInvitation :one
 INSERT INTO group_invitations (

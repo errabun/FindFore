@@ -116,6 +116,17 @@ func (s *Service) requireManager(ctx context.Context, groupID, actorID int64) (*
 	return m, nil
 }
 
+func (s *Service) requireOwner(ctx context.Context, groupID, actorID int64) (*entity.GroupMembership, error) {
+	m, err := s.membership(ctx, groupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil || !m.IsOwner() {
+		return nil, ErrGroupForbidden
+	}
+	return m, nil
+}
+
 func (s *Service) details(ctx context.Context, g *entity.Group, viewer *entity.GroupMembership) (*port.GroupDetails, error) {
 	owner, err := s.players.GetByID(ctx, g.OwnerPlayerID)
 	ownerName := ""

@@ -111,6 +111,53 @@ func (r *GroupRepo) Update(ctx context.Context, g entity.Group) (*entity.Group, 
 	return &out, nil
 }
 
+func (r *GroupRepo) Delete(ctx context.Context, id int64) error {
+	return r.q.DeleteGroup(ctx, id)
+}
+
+func (r *GroupRepo) TransferOwnership(ctx context.Context, groupID, fromPlayerID, toPlayerID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transfer ownership tx: %w", err)
+	}
+	defer tx.Rollback()
+	qtx := r.q.WithTx(tx)
+
+	if err := qtx.UpdateGroupOwner(ctx, sqlcgen.UpdateGroupOwnerParams{
+		ID: groupID, OwnerPlayerID: toPlayerID,
+	}); err != nil {
+		return err
+	}
+	from, err := qtx.GetGroupMembership(ctx, sqlcgen.GetGroupMembershipParams{
+		GroupID: groupID, PlayerID: fromPlayerID,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := qtx.UpdateGroupMembership(ctx, sqlcgen.UpdateGroupMembershipParams{
+		GroupID: from.GroupID, PlayerID: from.PlayerID,
+		Role: entity.GroupRoleMember, Status: from.Status,
+	}); err != nil {
+		return err
+	}
+	to, err := qtx.GetGroupMembership(ctx, sqlcgen.GetGroupMembershipParams{
+		GroupID: groupID, PlayerID: toPlayerID,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := qtx.UpdateGroupMembership(ctx, sqlcgen.UpdateGroupMembershipParams{
+		GroupID: to.GroupID, PlayerID: to.PlayerID,
+		Role: entity.GroupRoleOwner, Status: to.Status,
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transfer ownership: %w", err)
+	}
+	return nil
+}
+
 func (r *GroupRepo) ListPublic(ctx context.Context, search string, limit, offset int32) ([]entity.Group, error) {
 	rows, err := r.q.ListPublicGroups(ctx, sqlcgen.ListPublicGroupsParams{
 		Search: search,
@@ -262,6 +309,27 @@ func (r *GroupRepo) ListInvitationsByInvitee(ctx context.Context, inviteeID int6
 		}
 		out = append(out, port.GroupInvitationRow{
 			Invitation: inv, GroupName: row.GroupName, InviterName: row.InviterName.String,
+		})
+	}
+	return out, nil
+}
+
+func (r *GroupRepo) ListOutstandingInvitations(ctx context.Context, groupID int64) ([]port.GroupInvitationRow, error) {
+	rows, err := r.q.ListOutstandingGroupInvitations(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupInvitationRow, 0, len(rows))
+	for _, row := range rows {
+		inv := entity.GroupInvitation{
+			ID: row.ID, GroupID: row.GroupID, InviterPlayerID: row.InviterPlayerID,
+			InviteePlayerID: row.InviteePlayerID, CreatedAt: row.CreatedAt,
+			ExpiresAt: timePtr(row.ExpiresAt), AcceptedAt: timePtr(row.AcceptedAt),
+			DeclinedAt: timePtr(row.DeclinedAt),
+		}
+		out = append(out, port.GroupInvitationRow{
+			Invitation: inv, GroupName: row.GroupName,
+			InviterName: row.InviterName.String, InviteeName: row.InviteeName.String,
 		})
 	}
 	return out, nil

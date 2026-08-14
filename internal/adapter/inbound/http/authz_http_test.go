@@ -184,6 +184,8 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/events"},
 		{http.MethodDelete, "/api/v1/event/1"},
 		{http.MethodGet, "/api/v1/groups"},
+		{http.MethodDelete, "/api/v1/groups/1"},
+		{http.MethodPost, "/api/v1/groups/1/transfer-ownership"},
 	}
 
 	for _, tc := range paths {
