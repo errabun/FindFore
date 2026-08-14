@@ -97,22 +97,14 @@ func (s *Service) ListMine(ctx context.Context, actorID int64, limit, offset int
 	if actorID <= 0 {
 		return nil, ErrInvalidGroup
 	}
-	list, err := s.groups.ListByPlayer(ctx, actorID, clampLimit(limit), clampOffset(offset))
-	if err != nil {
-		return nil, err
-	}
-	return s.detailsList(ctx, actorID, list)
+	return s.groups.ListByPlayerSummaries(ctx, actorID, clampLimit(limit), clampOffset(offset))
 }
 
 func (s *Service) ListDiscover(ctx context.Context, actorID int64, search string, limit, offset int32) ([]port.GroupDetails, error) {
 	if actorID <= 0 {
 		return nil, ErrInvalidGroup
 	}
-	list, err := s.groups.ListPublic(ctx, search, clampLimit(limit), clampOffset(offset))
-	if err != nil {
-		return nil, err
-	}
-	return s.detailsList(ctx, actorID, list)
+	return s.groups.ListPublicSummaries(ctx, actorID, search, clampLimit(limit), clampOffset(offset))
 }
 
 func validateIDs(ids ...int64) error {

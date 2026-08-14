@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
@@ -186,6 +187,75 @@ func (r *GroupRepo) ListByPlayer(ctx context.Context, playerID int64, limit, off
 	out := make([]entity.Group, len(rows))
 	for i, row := range rows {
 		out[i] = mapGroup(row)
+	}
+	return out, nil
+}
+
+func mapSummaryGroup(id, ownerPlayerID int64, name, description, privacy string, createdAt, updatedAt time.Time) entity.Group {
+	return entity.Group{
+		ID:            id,
+		OwnerPlayerID: ownerPlayerID,
+		Name:          name,
+		Description:   description,
+		Privacy:       privacy,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
+	}
+}
+
+func viewerMembership(groupID, playerID int64, role, status string, createdAt, updatedAt time.Time) *entity.GroupMembership {
+	return &entity.GroupMembership{
+		GroupID:   groupID,
+		PlayerID:  playerID,
+		Role:      role,
+		Status:    status,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+}
+
+func (r *GroupRepo) ListPublicSummaries(ctx context.Context, playerID int64, search string, limit, offset int32) ([]port.GroupDetails, error) {
+	rows, err := r.q.ListPublicGroupSummaries(ctx, sqlcgen.ListPublicGroupSummariesParams{
+		PlayerID: playerID,
+		Search:   search,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(rows))
+	for i, row := range rows {
+		d := port.GroupDetails{
+			Group:       mapSummaryGroup(row.ID, row.OwnerPlayerID, row.Name, row.Description, row.Privacy, row.CreatedAt, row.UpdatedAt),
+			OwnerName:   row.OwnerName,
+			MemberCount: row.MemberCount,
+		}
+		if row.ViewerRole.Valid && row.ViewerStatus.Valid {
+			d.Viewer = viewerMembership(row.ID, playerID, row.ViewerRole.String, row.ViewerStatus.String, row.ViewerCreatedAt.Time, row.ViewerUpdatedAt.Time)
+		}
+		out[i] = d
+	}
+	return out, nil
+}
+
+func (r *GroupRepo) ListByPlayerSummaries(ctx context.Context, playerID int64, limit, offset int32) ([]port.GroupDetails, error) {
+	rows, err := r.q.ListGroupSummariesByPlayer(ctx, sqlcgen.ListGroupSummariesByPlayerParams{
+		PlayerID: playerID,
+		Limit:    limit,
+		Offset:   offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(rows))
+	for i, row := range rows {
+		out[i] = port.GroupDetails{
+			Group:       mapSummaryGroup(row.ID, row.OwnerPlayerID, row.Name, row.Description, row.Privacy, row.CreatedAt, row.UpdatedAt),
+			OwnerName:   row.OwnerName,
+			MemberCount: row.MemberCount,
+			Viewer:      viewerMembership(row.ID, playerID, row.ViewerRole, row.ViewerStatus, row.ViewerCreatedAt, row.ViewerUpdatedAt),
+		}
 	}
 	return out, nil
 }

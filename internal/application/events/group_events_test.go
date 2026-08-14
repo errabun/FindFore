@@ -72,6 +72,12 @@ func (f *fakeEventGroups) ListByPlayer(_ context.Context, playerID int64, _, _ i
 	}
 	return out, nil
 }
+func (f *fakeEventGroups) ListPublicSummaries(context.Context, int64, string, int32, int32) ([]port.GroupDetails, error) {
+	return nil, nil
+}
+func (f *fakeEventGroups) ListByPlayerSummaries(context.Context, int64, int32, int32) ([]port.GroupDetails, error) {
+	return nil, nil
+}
 func (f *fakeEventGroups) CountActiveMembers(context.Context, int64) (int64, error) { return 0, nil }
 func (f *fakeEventGroups) ListActiveMembers(context.Context, int64, int32, int32) ([]port.GroupMemberRow, error) {
 	return nil, nil
@@ -122,6 +128,16 @@ func seededGroupEvents() (*fakeEventRepo, *fakePlayerEventRepo, *fakeEventGroups
 		entity.GroupMembership{GroupID: 1, PlayerID: 3, Role: entity.GroupRoleMember, Status: entity.GroupMembershipPending},
 	)
 	svc := events.NewService(eventRepo, playerEvents, fakeCourseRepo{}, groups)
+	eventRepo.activeMember = map[string]bool{}
+	eventRepo.groupNames = map[int64]string{}
+	for _, m := range groups.memberships {
+		if m.IsActive() {
+			eventRepo.activeMember[fmt.Sprintf("%d/%d", m.GroupID, m.PlayerID)] = true
+		}
+	}
+	for _, g := range groups.groups {
+		eventRepo.groupNames[g.ID] = g.Name
+	}
 	return eventRepo, playerEvents, groups, svc
 }
 

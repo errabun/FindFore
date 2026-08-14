@@ -86,3 +86,46 @@ FROM events e
 WHERE e.group_id = $1
   AND e.planned_starts_at >= NOW()
 ORDER BY e.planned_starts_at ASC, e.id ASC;
+
+-- name: ListUpcomingGroupEvents :many
+SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
+       c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name,
+       g.name AS group_name
+FROM events e
+JOIN courses c ON c.id = e.course_id
+JOIN players p ON p.id = e.host_id
+JOIN groups g ON g.id = e.group_id
+WHERE e.group_id = sqlc.arg(group_id)
+  AND e.planned_starts_at >= NOW()
+ORDER BY e.planned_starts_at ASC, e.id ASC;
+
+-- name: ListJoinableGroupEvents :many
+SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
+       c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name,
+       g.name AS group_name
+FROM events e
+JOIN courses c ON c.id = e.course_id
+JOIN players p ON p.id = e.host_id
+JOIN groups g ON g.id = e.group_id
+JOIN group_memberships gm
+    ON gm.group_id = e.group_id
+   AND gm.player_id = sqlc.arg(player_id)
+   AND gm.status = 'active'
+WHERE e.group_id IS NOT NULL
+  AND e.planned_starts_at >= NOW()
+  AND NOT EXISTS (
+      SELECT 1
+      FROM player_events pe
+      WHERE pe.event_id = e.id
+        AND pe.player_id = sqlc.arg(player_id)
+        AND pe.invite_status = 1
+  )
+  AND e.open_spots > (
+      SELECT COUNT(*)
+      FROM player_events pe3
+      WHERE pe3.event_id = e.id
+        AND pe3.invite_status = 1
+  )
+ORDER BY e.planned_starts_at ASC, e.id ASC;

@@ -242,6 +242,8 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 
 Schema: `000014` (`groups`, `group_memberships`, `group_invitations`), `000015` (`posts.group_id`), and `000016` (`events.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`. Group rounds reuse events (`private` forced on create); they do not appear on the public tee-time feed. Creating a group round also posts to group activity. Members who have not joined yet see open rounds on the dashboard (`GET /events/from-groups`). Deleting a group sets `events.group_id` to NULL so the host's round remains.
 
+Group list (`GET /groups`) is a single read-model query per page: group row + owner name + active member count + viewer membership. Joinable rounds and `GET /groups/{id}/events` load event details (including `group_name`) in one query, then hydrate RSVPs with one `player_events` query for the page — not a per-group or per-event round trip.
+
 ### Twelve scenario walkthroughs
 
 Domain stays provider-agnostic. Lightspeed is the concrete walkthrough; **ForeUP health check** = “same domain transitions, different adapter DTO mapping.”

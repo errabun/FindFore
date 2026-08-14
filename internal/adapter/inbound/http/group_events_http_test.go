@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -20,6 +21,7 @@ type httpFakeEvents struct {
 	details  map[int64]*entity.EventWithDetails
 	nextID   int64
 	accepted map[int64][]int64
+	groups   *httpFakeGroups
 }
 
 func newHTTPFakeEvents() *httpFakeEvents {
@@ -69,6 +71,50 @@ func (f *httpFakeEvents) ListIDsByGroupID(_ context.Context, groupID int64) ([]i
 	}
 	return ids, nil
 }
+
+func (f *httpFakeEvents) listedGroupEvent(id int64, e *entity.Event) entity.EventWithDetails {
+	d, ok := f.details[id]
+	if !ok {
+		return entity.EventWithDetails{ID: id, GroupID: e.GroupID, PlannedStartsAt: e.PlannedStartsAt, OpenSpots: e.OpenSpots}
+	}
+	cp := *d
+	if e.GroupID != nil && f.groups != nil {
+		if g, err := f.groups.GetByID(context.Background(), *e.GroupID); err == nil {
+			cp.GroupName = g.Name
+		}
+	}
+	return cp
+}
+
+func (f *httpFakeEvents) ListUpcomingByGroupID(_ context.Context, groupID int64) ([]entity.EventWithDetails, error) {
+	now := time.Now()
+	var out []entity.EventWithDetails
+	for id, e := range f.byID {
+		if e.GroupID != nil && *e.GroupID == groupID && !e.PlannedStartsAt.Before(now) {
+			out = append(out, f.listedGroupEvent(id, e))
+		}
+	}
+	return out, nil
+}
+
+func (f *httpFakeEvents) ListJoinableGroupDetails(_ context.Context, actorID int64) ([]entity.EventWithDetails, error) {
+	now := time.Now()
+	var out []entity.EventWithDetails
+	for id, e := range f.byID {
+		if e.GroupID == nil || e.PlannedStartsAt.Before(now) {
+			continue
+		}
+		if f.groups == nil {
+			continue
+		}
+		m, err := f.groups.GetMembership(context.Background(), *e.GroupID, actorID)
+		if err != nil || !m.IsActive() {
+			continue
+		}
+		out = append(out, f.listedGroupEvent(id, e))
+	}
+	return out, nil
+}
 func (f *httpFakeEvents) Create(context.Context, entity.Event) (int64, error) { return 0, nil }
 func (f *httpFakeEvents) CreateWithInvites(_ context.Context, e entity.Event, _ []int64) (int64, error) {
 	e.ID = f.nextID
@@ -111,6 +157,17 @@ func (f *httpFakePlayerEvents) ListPlayerIDsByEventAndStatus(_ context.Context, 
 		return f.accepted[eventID], nil
 	}
 	return nil, nil
+}
+func (f *httpFakePlayerEvents) ListByEventIDs(_ context.Context, eventIDs []int64) ([]entity.PlayerEvent, error) {
+	var out []entity.PlayerEvent
+	for _, eid := range eventIDs {
+		for _, pid := range f.accepted[eid] {
+			out = append(out, entity.PlayerEvent{
+				PlayerID: pid, EventID: eid, InviteStatus: entity.InviteStatusAccepted,
+			})
+		}
+	}
+	return out, nil
 }
 func (f *httpFakePlayerEvents) CountAcceptedForEvent(context.Context, int64) (int64, error) {
 	return 0, nil
@@ -164,6 +221,7 @@ func newGroupEventsHTTPEnv(t *testing.T) (*groupsHTTPEnv, *recordingGroupPosts) 
 	playerEvents := newHTTPFakePlayerEvents()
 	eventRepo := newHTTPFakeEvents()
 	eventRepo.accepted = playerEvents.accepted
+	eventRepo.groups = repo
 	posts := &recordingGroupPosts{}
 	groupSvc := groups.NewService(repo, httpFakePlayers{})
 	eventSvc := events.NewService(eventRepo, playerEvents, httpFakeEventCourses{}, repo)

@@ -110,6 +110,44 @@ func (f *httpFakeGroups) ListByPlayer(_ context.Context, playerID int64, _, _ in
 	}
 	return out, nil
 }
+
+func (f *httpFakeGroups) summary(g entity.Group, actorID int64) port.GroupDetails {
+	d := port.GroupDetails{Group: g, OwnerName: "Player"}
+	for _, m := range f.memberships {
+		if m.GroupID == g.ID && m.IsActive() {
+			d.MemberCount++
+		}
+	}
+	if m, ok := f.memberships[gkey(g.ID, actorID)]; ok {
+		cp := *m
+		d.Viewer = &cp
+	}
+	return d
+}
+
+func (f *httpFakeGroups) ListPublicSummaries(_ context.Context, playerID int64, search string, limit, offset int32) ([]port.GroupDetails, error) {
+	list, err := f.ListPublic(context.Background(), search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(list))
+	for i, g := range list {
+		out[i] = f.summary(g, playerID)
+	}
+	return out, nil
+}
+
+func (f *httpFakeGroups) ListByPlayerSummaries(_ context.Context, playerID int64, limit, offset int32) ([]port.GroupDetails, error) {
+	list, err := f.ListByPlayer(context.Background(), playerID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(list))
+	for i, g := range list {
+		out[i] = f.summary(g, playerID)
+	}
+	return out, nil
+}
 func (f *httpFakeGroups) CountActiveMembers(_ context.Context, groupID int64) (int64, error) {
 	var n int64
 	for _, m := range f.memberships {

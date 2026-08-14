@@ -7,3 +7,8 @@ sql:
       go:
         package: "sqlcgen"
         out: "../internal/adapter/outbound/postgres/sqlcgen"
+        overrides:
+          - db_type: "bigint[]"
+            go_type:
+              import: "github.com/lib/pq"
+              type: "Int64Array"

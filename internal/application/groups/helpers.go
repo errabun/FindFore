@@ -146,20 +146,3 @@ func (s *Service) details(ctx context.Context, g *entity.Group, viewer *entity.G
 		Viewer:      viewer,
 	}, nil
 }
-
-func (s *Service) detailsList(ctx context.Context, actorID int64, list []entity.Group) ([]port.GroupDetails, error) {
-	out := make([]port.GroupDetails, 0, len(list))
-	for i := range list {
-		g := list[i]
-		m, err := s.membership(ctx, g.ID, actorID)
-		if err != nil {
-			return nil, err
-		}
-		d, err := s.details(ctx, &g, m)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *d)
-	}
-	return out, nil
-}

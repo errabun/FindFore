@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,9 +13,11 @@ import (
 )
 
 type fakeEventRepo struct {
-	byID    map[int64]*entity.Event
-	details map[int64]*entity.EventWithDetails
-	nextID  int64
+	byID         map[int64]*entity.Event
+	details      map[int64]*entity.EventWithDetails
+	nextID       int64
+	activeMember map[string]bool
+	groupNames   map[int64]string
 }
 
 func newFakeEventRepo() *fakeEventRepo {
@@ -67,6 +70,44 @@ func (r *fakeEventRepo) ListIDsByGroupID(_ context.Context, groupID int64) ([]in
 		}
 	}
 	return ids, nil
+}
+
+func (r *fakeEventRepo) listedGroupEvent(id int64, e *entity.Event) entity.EventWithDetails {
+	d, ok := r.details[id]
+	if !ok {
+		return entity.EventWithDetails{ID: id, GroupID: e.GroupID, PlannedStartsAt: e.PlannedStartsAt, OpenSpots: e.OpenSpots}
+	}
+	cp := *d
+	if e.GroupID != nil && r.groupNames != nil {
+		cp.GroupName = r.groupNames[*e.GroupID]
+	}
+	return cp
+}
+
+func (r *fakeEventRepo) ListUpcomingByGroupID(_ context.Context, groupID int64) ([]entity.EventWithDetails, error) {
+	now := time.Now()
+	var out []entity.EventWithDetails
+	for id, e := range r.byID {
+		if e.GroupID != nil && *e.GroupID == groupID && !e.PlannedStartsAt.Before(now) {
+			out = append(out, r.listedGroupEvent(id, e))
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeEventRepo) ListJoinableGroupDetails(_ context.Context, actorID int64) ([]entity.EventWithDetails, error) {
+	now := time.Now()
+	var out []entity.EventWithDetails
+	for id, e := range r.byID {
+		if e.GroupID == nil || e.PlannedStartsAt.Before(now) {
+			continue
+		}
+		if r.activeMember == nil || !r.activeMember[fmt.Sprintf("%d/%d", *e.GroupID, actorID)] {
+			continue
+		}
+		out = append(out, r.listedGroupEvent(id, e))
+	}
+	return out, nil
 }
 func (r *fakeEventRepo) Create(context.Context, entity.Event) (int64, error) { return 0, nil }
 func (r *fakeEventRepo) CreateWithInvites(_ context.Context, e entity.Event, _ []int64) (int64, error) {
@@ -137,6 +178,17 @@ func (r *fakePlayerEventRepo) ListPlayerIDsByEventAndStatus(_ context.Context, e
 		return nil, nil
 	}
 	return r.byStatus[eventID][status], nil
+}
+func (r *fakePlayerEventRepo) ListByEventIDs(_ context.Context, eventIDs []int64) ([]entity.PlayerEvent, error) {
+	var out []entity.PlayerEvent
+	for _, eid := range eventIDs {
+		for status, ids := range r.byStatus[eid] {
+			for _, pid := range ids {
+				out = append(out, entity.PlayerEvent{PlayerID: pid, EventID: eid, InviteStatus: status})
+			}
+		}
+	}
+	return out, nil
 }
 func (r *fakePlayerEventRepo) CountAcceptedForEvent(context.Context, int64) (int64, error) {
 	return 0, nil

@@ -339,6 +339,90 @@ func (q *Queries) ListGroupEventIDs(ctx context.Context, groupID sql.NullInt64) 
 	return items, nil
 }
 
+const listJoinableGroupEvents = `-- name: ListJoinableGroupEvents :many
+SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
+       c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name,
+       g.name AS group_name
+FROM events e
+JOIN courses c ON c.id = e.course_id
+JOIN players p ON p.id = e.host_id
+JOIN groups g ON g.id = e.group_id
+JOIN group_memberships gm
+    ON gm.group_id = e.group_id
+   AND gm.player_id = $1
+   AND gm.status = 'active'
+WHERE e.group_id IS NOT NULL
+  AND e.planned_starts_at >= NOW()
+  AND NOT EXISTS (
+      SELECT 1
+      FROM player_events pe
+      WHERE pe.event_id = e.id
+        AND pe.player_id = $1
+        AND pe.invite_status = 1
+  )
+  AND e.open_spots > (
+      SELECT COUNT(*)
+      FROM player_events pe3
+      WHERE pe3.event_id = e.id
+        AND pe3.invite_status = 1
+  )
+ORDER BY e.planned_starts_at ASC, e.id ASC
+`
+
+type ListJoinableGroupEventsRow struct {
+	ID              int64
+	CourseID        int64
+	OpenSpots       sql.NullInt32
+	NumberOfHoles   sql.NullString
+	Private         sql.NullBool
+	HostID          int64
+	PlannedStartsAt time.Time
+	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
+	CourseName      sql.NullString
+	CourseTimezone  sql.NullString
+	HostName        sql.NullString
+	GroupName       string
+}
+
+func (q *Queries) ListJoinableGroupEvents(ctx context.Context, playerID int64) ([]ListJoinableGroupEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listJoinableGroupEvents, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJoinableGroupEventsRow
+	for rows.Next() {
+		var i ListJoinableGroupEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.OpenSpots,
+			&i.NumberOfHoles,
+			&i.Private,
+			&i.HostID,
+			&i.PlannedStartsAt,
+			&i.TeeTimeID,
+			&i.GroupID,
+			&i.CourseName,
+			&i.CourseTimezone,
+			&i.HostName,
+			&i.GroupName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublicEvents = `-- name: ListPublicEvents :many
 SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
        e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
@@ -387,6 +471,73 @@ func (q *Queries) ListPublicEvents(ctx context.Context) ([]ListPublicEventsRow, 
 			&i.CourseName,
 			&i.CourseTimezone,
 			&i.HostName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUpcomingGroupEvents = `-- name: ListUpcomingGroupEvents :many
+SELECT e.id, e.course_id, e.open_spots, e.number_of_holes,
+       e.private, e.host_id, e.planned_starts_at, e.tee_time_id, e.group_id,
+       c.name AS course_name, c.timezone AS course_timezone, p.name AS host_name,
+       g.name AS group_name
+FROM events e
+JOIN courses c ON c.id = e.course_id
+JOIN players p ON p.id = e.host_id
+JOIN groups g ON g.id = e.group_id
+WHERE e.group_id = $1
+  AND e.planned_starts_at >= NOW()
+ORDER BY e.planned_starts_at ASC, e.id ASC
+`
+
+type ListUpcomingGroupEventsRow struct {
+	ID              int64
+	CourseID        int64
+	OpenSpots       sql.NullInt32
+	NumberOfHoles   sql.NullString
+	Private         sql.NullBool
+	HostID          int64
+	PlannedStartsAt time.Time
+	TeeTimeID       sql.NullInt64
+	GroupID         sql.NullInt64
+	CourseName      sql.NullString
+	CourseTimezone  sql.NullString
+	HostName        sql.NullString
+	GroupName       string
+}
+
+func (q *Queries) ListUpcomingGroupEvents(ctx context.Context, groupID sql.NullInt64) ([]ListUpcomingGroupEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUpcomingGroupEvents, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUpcomingGroupEventsRow
+	for rows.Next() {
+		var i ListUpcomingGroupEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.OpenSpots,
+			&i.NumberOfHoles,
+			&i.Private,
+			&i.HostID,
+			&i.PlannedStartsAt,
+			&i.TeeTimeID,
+			&i.GroupID,
+			&i.CourseName,
+			&i.CourseTimezone,
+			&i.HostName,
+			&i.GroupName,
 		); err != nil {
 			return nil, err
 		}

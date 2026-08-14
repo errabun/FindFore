@@ -19,6 +19,11 @@ SELECT player_id
 FROM player_events
 WHERE event_id = $1 AND invite_status = $2;
 
+-- name: ListPlayerEventsByEventIDs :many
+SELECT id, player_id, event_id, invite_status
+FROM player_events
+WHERE event_id = ANY(sqlc.arg('event_ids')::bigint[]);
+
 -- name: CountAcceptedForEvent :one
 SELECT COUNT(*) FROM player_events
 WHERE event_id = $1 AND invite_status = 1;

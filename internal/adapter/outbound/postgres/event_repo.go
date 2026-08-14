@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
+	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
 type EventRepo struct {
@@ -116,6 +118,64 @@ func (r *EventRepo) ListFriendsAvailableIDs(ctx context.Context, followerID int3
 
 func (r *EventRepo) ListIDsByGroupID(ctx context.Context, groupID int64) ([]int64, error) {
 	return r.q.ListGroupEventIDs(ctx, sql.NullInt64{Int64: groupID, Valid: true})
+}
+
+func mapListedGroupEvent(
+	id, hostID int64,
+	openSpots sql.NullInt32,
+	numberOfHoles sql.NullString,
+	private sql.NullBool,
+	plannedStartsAt time.Time,
+	teeTimeID, groupID sql.NullInt64,
+	courseName, courseTimezone, hostName sql.NullString,
+	groupName string,
+) entity.EventWithDetails {
+	return entity.EventWithDetails{
+		ID:              id,
+		CourseName:      courseName.String,
+		CourseTimezone:  courseTimezone.String,
+		PlannedStartsAt: plannedStartsAt,
+		TeeTimeID:       teeTimeIDPtr(teeTimeID),
+		GroupID:         teeTimeIDPtr(groupID),
+		OpenSpots:       openSpots.Int32,
+		NumberOfHoles:   numberOfHoles.String,
+		Private:         private.Bool,
+		HostName:        hostName.String,
+		HostID:          int32(hostID),
+		GroupName:       groupName,
+	}
+}
+
+func (r *EventRepo) ListUpcomingByGroupID(ctx context.Context, groupID int64) ([]entity.EventWithDetails, error) {
+	rows, err := r.q.ListUpcomingGroupEvents(ctx, sql.NullInt64{Int64: groupID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.EventWithDetails, len(rows))
+	for i, row := range rows {
+		out[i] = mapListedGroupEvent(
+			row.ID, row.HostID, row.OpenSpots, row.NumberOfHoles, row.Private,
+			row.PlannedStartsAt, row.TeeTimeID, row.GroupID,
+			row.CourseName, row.CourseTimezone, row.HostName, row.GroupName,
+		)
+	}
+	return out, nil
+}
+
+func (r *EventRepo) ListJoinableGroupDetails(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error) {
+	rows, err := r.q.ListJoinableGroupEvents(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.EventWithDetails, len(rows))
+	for i, row := range rows {
+		out[i] = mapListedGroupEvent(
+			row.ID, row.HostID, row.OpenSpots, row.NumberOfHoles, row.Private,
+			row.PlannedStartsAt, row.TeeTimeID, row.GroupID,
+			row.CourseName, row.CourseTimezone, row.HostName, row.GroupName,
+		)
+	}
+	return out, nil
 }
 
 func createEventParams(e entity.Event) sqlcgen.CreateEventParams {
@@ -228,3 +288,5 @@ func (r *EventRepo) Delete(ctx context.Context, id int64) error {
 func (r *EventRepo) DeletePast(ctx context.Context) error {
 	return r.q.DeletePastEvents(ctx)
 }
+
+var _ port.EventRepository = (*EventRepo)(nil)

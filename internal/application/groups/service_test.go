@@ -179,6 +179,44 @@ func (f *fakeGroups) ListByPlayer(_ context.Context, playerID int64, limit, offs
 	return page(out, limit, offset), nil
 }
 
+func (f *fakeGroups) summary(g entity.Group, actorID int64) port.GroupDetails {
+	d := port.GroupDetails{Group: g, OwnerName: f.playerNames[g.OwnerPlayerID]}
+	for _, m := range f.memberships {
+		if m.GroupID == g.ID && m.Status == entity.GroupMembershipActive {
+			d.MemberCount++
+		}
+	}
+	if m, ok := f.memberships[memKey(g.ID, actorID)]; ok {
+		cp := *m
+		d.Viewer = &cp
+	}
+	return d
+}
+
+func (f *fakeGroups) ListPublicSummaries(_ context.Context, playerID int64, search string, limit, offset int32) ([]port.GroupDetails, error) {
+	list, err := f.ListPublic(context.Background(), search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(list))
+	for i, g := range list {
+		out[i] = f.summary(g, playerID)
+	}
+	return out, nil
+}
+
+func (f *fakeGroups) ListByPlayerSummaries(_ context.Context, playerID int64, limit, offset int32) ([]port.GroupDetails, error) {
+	list, err := f.ListByPlayer(context.Background(), playerID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]port.GroupDetails, len(list))
+	for i, g := range list {
+		out[i] = f.summary(g, playerID)
+	}
+	return out, nil
+}
+
 func page(in []entity.Group, limit, offset int32) []entity.Group {
 	if offset >= int32(len(in)) {
 		return nil
@@ -361,6 +399,8 @@ func newSvc() (*groups.Service, *fakeGroups) {
 	players := newFakePlayers(1, 2, 3, 4)
 	players.byID[1].Name = "Eric"
 	players.byID[2].Name = "Sam"
+	repo.playerNames[1] = "Eric"
+	repo.playerNames[2] = "Sam"
 	return groups.NewService(repo, players), repo
 }
 
@@ -374,6 +414,34 @@ func TestCreateGroupOwnerMembership(t *testing.T) {
 	require.Equal(t, int64(1), d.MemberCount)
 	require.NotNil(t, d.Viewer)
 	require.Equal(t, entity.GroupRoleOwner, d.Viewer.Role)
+}
+
+func TestListMineAndDiscoverSummaries(t *testing.T) {
+	svc, _ := newSvc()
+	ctx := context.Background()
+	created, err := svc.Create(ctx, port.CreateGroupInput{
+		ActorID: 1, Name: "Saturday Morning Golf", Privacy: entity.GroupPrivacyPublic,
+	})
+	require.NoError(t, err)
+	_, err = svc.Join(ctx, 2, created.Group.ID)
+	require.NoError(t, err)
+
+	mine, err := svc.ListMine(ctx, 1, 20, 0)
+	require.NoError(t, err)
+	require.Len(t, mine, 1)
+	require.Equal(t, "Eric", mine[0].OwnerName)
+	require.Equal(t, int64(2), mine[0].MemberCount)
+	require.NotNil(t, mine[0].Viewer)
+	require.Equal(t, entity.GroupRoleOwner, mine[0].Viewer.Role)
+
+	discover, err := svc.ListDiscover(ctx, 2, "", 20, 0)
+	require.NoError(t, err)
+	require.Len(t, discover, 1)
+	require.Equal(t, "Eric", discover[0].OwnerName)
+	require.Equal(t, int64(2), discover[0].MemberCount)
+	require.NotNil(t, discover[0].Viewer)
+	require.Equal(t, entity.GroupRoleMember, discover[0].Viewer.Role)
+	require.Equal(t, entity.GroupMembershipActive, discover[0].Viewer.Status)
 }
 
 func TestJoinPublicIdempotent(t *testing.T) {

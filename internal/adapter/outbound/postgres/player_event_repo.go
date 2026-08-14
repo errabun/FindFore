@@ -8,6 +8,7 @@ import (
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
+	"github.com/ericrabun/findfore-go/internal/domain/port"
 )
 
 type PlayerEventRepo struct {
@@ -77,6 +78,26 @@ func (r *PlayerEventRepo) ListPlayerIDsByEventAndStatus(ctx context.Context, eve
 		EventID:      eventID,
 		InviteStatus: int32(status),
 	})
+}
+
+func (r *PlayerEventRepo) ListByEventIDs(ctx context.Context, eventIDs []int64) ([]entity.PlayerEvent, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := r.q.ListPlayerEventsByEventIDs(ctx, eventIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.PlayerEvent, len(rows))
+	for i, row := range rows {
+		out[i] = entity.PlayerEvent{
+			ID:           row.ID,
+			PlayerID:     row.PlayerID,
+			EventID:      row.EventID,
+			InviteStatus: entity.InviteStatus(row.InviteStatus),
+		}
+	}
+	return out, nil
 }
 
 func (r *PlayerEventRepo) CountAcceptedForEvent(ctx context.Context, eventID int64) (int64, error) {
@@ -237,3 +258,5 @@ func (r *PlayerEventRepo) AcceptInvite(ctx context.Context, playerID, eventID in
 		InviteStatus: entity.InviteStatus(row.InviteStatus),
 	}, nil
 }
+
+var _ port.PlayerEventRepository = (*PlayerEventRepo)(nil)

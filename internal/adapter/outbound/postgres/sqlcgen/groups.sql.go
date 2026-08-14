@@ -371,6 +371,94 @@ func (q *Queries) ListGroupInvitationsByInvitee(ctx context.Context, inviteePlay
 	return items, nil
 }
 
+const listGroupSummariesByPlayer = `-- name: ListGroupSummariesByPlayer :many
+SELECT
+    g.id,
+    g.owner_player_id,
+    g.name,
+    g.description,
+    g.privacy,
+    g.created_at,
+    g.updated_at,
+    COALESCE(owner.name, '') AS owner_name,
+    (
+        SELECT COUNT(*)::bigint
+        FROM group_memberships cm
+        WHERE cm.group_id = g.id
+          AND cm.status = 'active'
+    ) AS member_count,
+    m.role AS viewer_role,
+    m.status AS viewer_status,
+    m.created_at AS viewer_created_at,
+    m.updated_at AS viewer_updated_at
+FROM groups g
+INNER JOIN group_memberships m ON m.group_id = g.id
+INNER JOIN players owner ON owner.id = g.owner_player_id
+WHERE m.player_id = $1
+  AND m.status = 'active'
+ORDER BY g.name ASC, g.id ASC
+LIMIT $3 OFFSET $2
+`
+
+type ListGroupSummariesByPlayerParams struct {
+	PlayerID int64
+	Offset   int32
+	Limit    int32
+}
+
+type ListGroupSummariesByPlayerRow struct {
+	ID              int64
+	OwnerPlayerID   int64
+	Name            string
+	Description     string
+	Privacy         string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	OwnerName       string
+	MemberCount     int64
+	ViewerRole      string
+	ViewerStatus    string
+	ViewerCreatedAt time.Time
+	ViewerUpdatedAt time.Time
+}
+
+func (q *Queries) ListGroupSummariesByPlayer(ctx context.Context, arg ListGroupSummariesByPlayerParams) ([]ListGroupSummariesByPlayerRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupSummariesByPlayer, arg.PlayerID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGroupSummariesByPlayerRow
+	for rows.Next() {
+		var i ListGroupSummariesByPlayerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerPlayerID,
+			&i.Name,
+			&i.Description,
+			&i.Privacy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerName,
+			&i.MemberCount,
+			&i.ViewerRole,
+			&i.ViewerStatus,
+			&i.ViewerCreatedAt,
+			&i.ViewerUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupsByPlayer = `-- name: ListGroupsByPlayer :many
 SELECT g.id, g.owner_player_id, g.name, g.description, g.privacy, g.created_at, g.updated_at
 FROM groups g
@@ -517,6 +605,102 @@ func (q *Queries) ListPendingGroupMembers(ctx context.Context, groupID int64) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PlayerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicGroupSummaries = `-- name: ListPublicGroupSummaries :many
+SELECT
+    g.id,
+    g.owner_player_id,
+    g.name,
+    g.description,
+    g.privacy,
+    g.created_at,
+    g.updated_at,
+    COALESCE(owner.name, '') AS owner_name,
+    (
+        SELECT COUNT(*)::bigint
+        FROM group_memberships cm
+        WHERE cm.group_id = g.id
+          AND cm.status = 'active'
+    ) AS member_count,
+    viewer.role AS viewer_role,
+    viewer.status AS viewer_status,
+    viewer.created_at AS viewer_created_at,
+    viewer.updated_at AS viewer_updated_at
+FROM groups g
+INNER JOIN players owner ON owner.id = g.owner_player_id
+LEFT JOIN group_memberships viewer
+    ON viewer.group_id = g.id
+   AND viewer.player_id = $1
+WHERE g.privacy = 'public'
+  AND ($2::text = '' OR g.name ILIKE '%' || $2::text || '%')
+ORDER BY g.name ASC, g.id ASC
+LIMIT $4 OFFSET $3
+`
+
+type ListPublicGroupSummariesParams struct {
+	PlayerID int64
+	Search   string
+	Offset   int32
+	Limit    int32
+}
+
+type ListPublicGroupSummariesRow struct {
+	ID              int64
+	OwnerPlayerID   int64
+	Name            string
+	Description     string
+	Privacy         string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	OwnerName       string
+	MemberCount     int64
+	ViewerRole      sql.NullString
+	ViewerStatus    sql.NullString
+	ViewerCreatedAt sql.NullTime
+	ViewerUpdatedAt sql.NullTime
+}
+
+func (q *Queries) ListPublicGroupSummaries(ctx context.Context, arg ListPublicGroupSummariesParams) ([]ListPublicGroupSummariesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicGroupSummaries,
+		arg.PlayerID,
+		arg.Search,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicGroupSummariesRow
+	for rows.Next() {
+		var i ListPublicGroupSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerPlayerID,
+			&i.Name,
+			&i.Description,
+			&i.Privacy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerName,
+			&i.MemberCount,
+			&i.ViewerRole,
+			&i.ViewerStatus,
+			&i.ViewerCreatedAt,
+			&i.ViewerUpdatedAt,
 		); err != nil {
 			return nil, err
 		}

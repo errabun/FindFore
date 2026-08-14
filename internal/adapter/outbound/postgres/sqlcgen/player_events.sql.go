@@ -8,6 +8,8 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+
+	"github.com/lib/pq"
 )
 
 const closePendingForEvent = `-- name: ClosePendingForEvent :exec
@@ -113,6 +115,47 @@ func (q *Queries) ListAcceptedEventIDsByPlayerID(ctx context.Context, playerID i
 			return nil, err
 		}
 		items = append(items, event_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlayerEventsByEventIDs = `-- name: ListPlayerEventsByEventIDs :many
+SELECT id, player_id, event_id, invite_status
+FROM player_events
+WHERE event_id = ANY($1::bigint[])
+`
+
+type ListPlayerEventsByEventIDsRow struct {
+	ID           int64
+	PlayerID     int64
+	EventID      int64
+	InviteStatus int32
+}
+
+func (q *Queries) ListPlayerEventsByEventIDs(ctx context.Context, eventIds []int64) ([]ListPlayerEventsByEventIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPlayerEventsByEventIDs, pq.Array(eventIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlayerEventsByEventIDsRow
+	for rows.Next() {
+		var i ListPlayerEventsByEventIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PlayerID,
+			&i.EventID,
+			&i.InviteStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

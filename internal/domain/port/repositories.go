@@ -43,6 +43,8 @@ type EventRepository interface {
 	ListIDsByPlayerID(ctx context.Context, playerID int64) ([]int64, error)
 	ListFriendsAvailableIDs(ctx context.Context, followerID int32, playerID int64) ([]int64, error)
 	ListIDsByGroupID(ctx context.Context, groupID int64) ([]int64, error)
+	ListUpcomingByGroupID(ctx context.Context, groupID int64) ([]entity.EventWithDetails, error)
+	ListJoinableGroupDetails(ctx context.Context, actorID int64) ([]entity.EventWithDetails, error)
 	Create(ctx context.Context, e entity.Event) (int64, error)
 	CreateWithInvites(ctx context.Context, e entity.Event, invitees []int64) (int64, error)
 	Update(ctx context.Context, e entity.Event) error
@@ -80,6 +82,7 @@ type PlayerEventRepository interface {
 	Create(ctx context.Context, pe entity.PlayerEvent) (*entity.PlayerEvent, error)
 	UpdateStatus(ctx context.Context, playerID, eventID int64, status entity.InviteStatus) (*entity.PlayerEvent, error)
 	ListPlayerIDsByEventAndStatus(ctx context.Context, eventID int64, status entity.InviteStatus) ([]int64, error)
+	ListByEventIDs(ctx context.Context, eventIDs []int64) ([]entity.PlayerEvent, error)
 	CountAcceptedForEvent(ctx context.Context, eventID int64) (int64, error)
 	ClosePendingForEvent(ctx context.Context, eventID int64) error
 	ReopenClosedForEvent(ctx context.Context, eventID int64) error
@@ -144,6 +147,8 @@ type GroupRepository interface {
 	TransferOwnership(ctx context.Context, groupID, fromPlayerID, toPlayerID int64) error
 	ListPublic(ctx context.Context, search string, limit, offset int32) ([]entity.Group, error)
 	ListByPlayer(ctx context.Context, playerID int64, limit, offset int32) ([]entity.Group, error)
+	ListPublicSummaries(ctx context.Context, playerID int64, search string, limit, offset int32) ([]GroupDetails, error)
+	ListByPlayerSummaries(ctx context.Context, playerID int64, limit, offset int32) ([]GroupDetails, error)
 	CountActiveMembers(ctx context.Context, groupID int64) (int64, error)
 
 	GetMembership(ctx context.Context, groupID, playerID int64) (*entity.GroupMembership, error)

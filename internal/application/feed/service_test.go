@@ -192,6 +192,12 @@ func (f *fakeFeedGroups) ListPublic(context.Context, string, int32, int32) ([]en
 func (f *fakeFeedGroups) ListByPlayer(context.Context, int64, int32, int32) ([]entity.Group, error) {
 	return nil, nil
 }
+func (f *fakeFeedGroups) ListPublicSummaries(context.Context, int64, string, int32, int32) ([]port.GroupDetails, error) {
+	return nil, nil
+}
+func (f *fakeFeedGroups) ListByPlayerSummaries(context.Context, int64, int32, int32) ([]port.GroupDetails, error) {
+	return nil, nil
+}
 func (f *fakeFeedGroups) CountActiveMembers(context.Context, int64) (int64, error) { return 0, nil }
 func (f *fakeFeedGroups) ListActiveMembers(context.Context, int64, int32, int32) ([]port.GroupMemberRow, error) {
 	return nil, nil
