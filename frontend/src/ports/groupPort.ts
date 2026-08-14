@@ -1,4 +1,5 @@
 import type { GroupInvitation, GroupMember, GroupSummary } from '../domain/group/types';
+import type { Post } from '../domain/social/types';
 
 export interface GroupPort {
   listMine(): Promise<GroupSummary[]>;
@@ -21,4 +22,6 @@ export interface GroupPort {
   listJoinRequests(groupId: number): Promise<GroupMember[]>;
   approveJoinRequest(groupId: number, playerId: number): Promise<GroupMember>;
   denyJoinRequest(groupId: number, playerId: number): Promise<void>;
+  listPosts(groupId: number): Promise<Post[]>;
+  createPost(groupId: number, body: string): Promise<Post>;
 }

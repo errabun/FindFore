@@ -50,6 +50,7 @@ function groupReactions(reactions: Reaction[], currentUserId: number): GroupedRe
 interface PostCardProps {
   post: Post;
   currentUserId: number;
+  canDelete?: boolean;
   onToggleReaction: (postId: number, emoji: string) => void;
   onCreateReply: (postId: number, body: string) => void;
   onDeletePost: (postId: number) => void;
@@ -59,6 +60,7 @@ interface PostCardProps {
 const PostCard = ({
   post,
   currentUserId,
+  canDelete,
   onToggleReaction,
   onCreateReply,
   onDeletePost,
@@ -67,6 +69,7 @@ const PostCard = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
   const isAuthor = post.player_id === currentUserId;
+  const showDelete = canDelete ?? isAuthor;
   const grouped = groupReactions(post.reactions, currentUserId);
   const reactionCount = post.reactions.length;
   const replyCount = post.replies.length;
@@ -95,7 +98,7 @@ const PostCard = ({
             </Text>
           </div>
         </Group>
-        {isAuthor && (
+        {showDelete && (
           <Menu position='bottom-end' withArrow>
             <Menu.Target>
               <ActionIcon variant='subtle' color='gray' size='sm'>

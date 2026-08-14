@@ -41,7 +41,13 @@ type stubPosts struct{}
 func (stubPosts) List(context.Context, int32, int32) ([]entity.PostWithDetails, error) {
 	return []entity.PostWithDetails{}, nil
 }
+func (stubPosts) ListForGroup(context.Context, int64, int64, int32, int32) ([]entity.PostWithDetails, error) {
+	return []entity.PostWithDetails{}, nil
+}
 func (stubPosts) Create(context.Context, int64, string) (*entity.PostWithDetails, error) {
+	return nil, nil
+}
+func (stubPosts) CreateForGroup(context.Context, int64, int64, string) (*entity.PostWithDetails, error) {
 	return nil, nil
 }
 func (stubPosts) Delete(context.Context, int64, int64) error { return nil }
@@ -184,6 +190,7 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/events"},
 		{http.MethodDelete, "/api/v1/event/1"},
 		{http.MethodGet, "/api/v1/groups"},
+		{http.MethodGet, "/api/v1/groups/1/posts"},
 		{http.MethodDelete, "/api/v1/groups/1"},
 		{http.MethodPost, "/api/v1/groups/1/transfer-ownership"},
 	}

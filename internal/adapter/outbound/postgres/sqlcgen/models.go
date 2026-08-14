@@ -116,6 +116,7 @@ type Post struct {
 	Body      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	GroupID   sql.NullInt64
 }
 
 type Reaction struct {

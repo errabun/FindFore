@@ -1,4 +1,5 @@
 import type { GroupInvitation, GroupMember, GroupSummary } from '../../domain/group/types';
+import type { Post } from '../../domain/social/types';
 import type { GroupPort } from '../../ports/groupPort';
 import { endpoints, request, requestVoid } from './httpClient';
 
@@ -89,5 +90,15 @@ export const groupAdapter: GroupPort = {
   },
   denyJoinRequest(groupId, playerId) {
     return requestVoid(`${endpoints.groups}/${groupId}/join-requests/${playerId}/deny`, { method: 'POST' });
+  },
+  async listPosts(groupId) {
+    const body = await request<{ posts: Post[] }>(`${endpoints.groups}/${groupId}/posts`);
+    return body.posts ?? [];
+  },
+  createPost(groupId, body) {
+    return request<Post>(`${endpoints.groups}/${groupId}/posts`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
   },
 };

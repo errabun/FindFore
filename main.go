@@ -63,8 +63,8 @@ func main() {
 	eventSvc := events.NewService(eventRepo, playerEventRepo, courseRepo)
 	playerEventSvc := events.NewPlayerEventService(playerEventRepo, eventRepo)
 	friendshipSvc := friends.NewService(friendshipRepo, playerSvc)
-	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo)
 	groupRepo := postgres.NewGroupRepo(queries, db)
+	postSvc := feed.NewService(postRepo, reactionRepo, replyRepo, groupRepo)
 	groupSvc := groups.NewService(groupRepo, playerRepo)
 
 	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc, bookingSvc, groupSvc)

@@ -168,7 +168,7 @@ function App() {
             !hostPlayer ? (
               <Navigate to='/login' replace />
             ) : (
-              <GroupDetailPage hostPlayer={hostPlayer} friends={friends} />
+              <GroupDetailPage hostPlayer={hostPlayer} friends={friends} currentUserName={currentUserName} />
             )
           }
         />

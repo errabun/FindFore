@@ -14,23 +14,25 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { FiAlertCircle, FiArrowLeft, FiUsers } from 'react-icons/fi';
+import { FiAlertCircle, FiArrowLeft, FiMessageSquare, FiUsers } from 'react-icons/fi';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
 import { useGroup } from '../../hooks/useGroups';
 import type { Friend } from '../../domain/social/types';
 import GroupSettingsPanel from './GroupSettingsPanel';
+import GroupActivity from './GroupActivity';
 
 interface GroupDetailPageProps {
   hostPlayer: number;
   friends: Friend[];
+  currentUserName: string;
 }
 
 function actionMessage(err: unknown, fallback: string) {
   return err instanceof ApiError ? err.message : fallback;
 }
 
-export default function GroupDetailPage({ hostPlayer, friends }: GroupDetailPageProps) {
+export default function GroupDetailPage({ hostPlayer, friends, currentUserName }: GroupDetailPageProps) {
   const { groupId } = useParams();
   const id = Number(groupId);
   const navigate = useNavigate();
@@ -175,13 +177,25 @@ export default function GroupDetailPage({ hostPlayer, friends }: GroupDetailPage
       )}
 
       {isActive && (
-        <Tabs defaultValue='members' mt='md'>
+        <Tabs defaultValue='activity' mt='md'>
           <Tabs.List>
+            <Tabs.Tab value='activity' leftSection={<FiMessageSquare size={14} />}>
+              Activity
+            </Tabs.Tab>
             <Tabs.Tab value='members' leftSection={<FiUsers size={14} />}>
               Members
             </Tabs.Tab>
             {canManage && <Tabs.Tab value='settings'>Settings</Tabs.Tab>}
           </Tabs.List>
+
+          <Tabs.Panel value='activity' pt='md'>
+            <GroupActivity
+              groupId={group.id}
+              currentUserId={hostPlayer}
+              currentUserName={currentUserName || members.find((m) => m.player_id === hostPlayer)?.player_name || ''}
+              canManage={canManage}
+            />
+          </Tabs.Panel>
 
           <Tabs.Panel value='members' pt='md'>
             <Stack gap='xs' mb='lg'>

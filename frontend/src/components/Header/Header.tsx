@@ -98,7 +98,7 @@ const Header = ({ screenWidth, isLoggedIn, onLogout }: HeaderProps) => {
           }}
         >
           <GiGolfTee data-cy='logo' style={{ color: 'var(--ff-accent)', fontSize: '1.4em' }} />
-          ForeFinder
+          FindFore
         </Anchor>
 
         {screenWidth > 1024 ? (

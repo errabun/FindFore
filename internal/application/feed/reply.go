@@ -12,6 +12,13 @@ func (s *Service) CreateReply(ctx context.Context, postID, playerID int64, body 
 	if body == "" {
 		return nil, &apperr.ValidationError{Message: "Reply body can't be blank"}
 	}
+	post, err := s.loadPost(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.requireCanRead(ctx, post, playerID); err != nil {
+		return nil, err
+	}
 
 	reply, err := s.replies.Create(ctx, postID, playerID, body)
 	if err != nil {

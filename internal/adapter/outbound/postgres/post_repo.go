@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
@@ -20,26 +22,7 @@ func (r *PostRepo) GetByID(ctx context.Context, id int64) (*entity.PostWithDetai
 	if err != nil {
 		return nil, err
 	}
-
-	reactions, err := r.q.ListReactionsByPostID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	replies, err := r.q.ListRepliesByPostID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &entity.PostWithDetails{
-		ID:         row.ID,
-		PlayerID:   row.PlayerID,
-		PlayerName: row.PlayerName.String,
-		Body:       row.Body,
-		CreatedAt:  row.CreatedAt,
-		Reactions:  mapReactions(reactions),
-		Replies:    mapReplies(replies),
-	}, nil
+	return r.attachEngagement(ctx, row.ID, row.PlayerID, row.PlayerName.String, teeTimeIDPtr(row.GroupID), row.Body, row.CreatedAt)
 }
 
 func (r *PostRepo) List(ctx context.Context, limit, offset int32) ([]entity.PostWithDetails, error) {
@@ -50,36 +33,42 @@ func (r *PostRepo) List(ctx context.Context, limit, offset int32) ([]entity.Post
 	if err != nil {
 		return nil, err
 	}
-
 	posts := make([]entity.PostWithDetails, len(rows))
 	for i, row := range rows {
-		reactions, err := r.q.ListReactionsByPostID(ctx, row.ID)
+		detail, err := r.attachEngagement(ctx, row.ID, row.PlayerID, row.PlayerName.String, teeTimeIDPtr(row.GroupID), row.Body, row.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-
-		replies, err := r.q.ListRepliesByPostID(ctx, row.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		posts[i] = entity.PostWithDetails{
-			ID:         row.ID,
-			PlayerID:   row.PlayerID,
-			PlayerName: row.PlayerName.String,
-			Body:       row.Body,
-			CreatedAt:  row.CreatedAt,
-			Reactions:  mapReactions(reactions),
-			Replies:    mapReplies(replies),
-		}
+		posts[i] = *detail
 	}
 	return posts, nil
 }
 
-func (r *PostRepo) Create(ctx context.Context, playerID int64, body string) (int64, error) {
+func (r *PostRepo) ListByGroupID(ctx context.Context, groupID int64, limit, offset int32) ([]entity.PostWithDetails, error) {
+	rows, err := r.q.ListGroupPosts(ctx, sqlcgen.ListGroupPostsParams{
+		GroupID: sql.NullInt64{Int64: groupID, Valid: true},
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	posts := make([]entity.PostWithDetails, len(rows))
+	for i, row := range rows {
+		detail, err := r.attachEngagement(ctx, row.ID, row.PlayerID, row.PlayerName.String, teeTimeIDPtr(row.GroupID), row.Body, row.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		posts[i] = *detail
+	}
+	return posts, nil
+}
+
+func (r *PostRepo) Create(ctx context.Context, playerID int64, body string, groupID *int64) (int64, error) {
 	row, err := r.q.CreatePost(ctx, sqlcgen.CreatePostParams{
 		PlayerID: playerID,
 		Body:     body,
+		GroupID:  nullTeeTimeID(groupID),
 	})
 	if err != nil {
 		return 0, err
@@ -92,6 +81,31 @@ func (r *PostRepo) Delete(ctx context.Context, id, playerID int64) error {
 		ID:       id,
 		PlayerID: playerID,
 	})
+}
+
+func (r *PostRepo) DeleteByID(ctx context.Context, id int64) error {
+	return r.q.DeletePostByID(ctx, id)
+}
+
+func (r *PostRepo) attachEngagement(ctx context.Context, id, playerID int64, playerName string, groupID *int64, body string, createdAt time.Time) (*entity.PostWithDetails, error) {
+	reactions, err := r.q.ListReactionsByPostID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	replies, err := r.q.ListRepliesByPostID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &entity.PostWithDetails{
+		ID:         id,
+		PlayerID:   playerID,
+		PlayerName: playerName,
+		GroupID:    groupID,
+		Body:       body,
+		CreatedAt:  createdAt,
+		Reactions:  mapReactions(reactions),
+		Replies:    mapReplies(replies),
+	}, nil
 }
 
 func mapReactions(rows []sqlcgen.ListReactionsByPostIDRow) []entity.Reaction {

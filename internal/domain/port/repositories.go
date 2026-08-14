@@ -104,8 +104,10 @@ type FriendshipRepository interface {
 type PostRepository interface {
 	GetByID(ctx context.Context, id int64) (*entity.PostWithDetails, error)
 	List(ctx context.Context, limit, offset int32) ([]entity.PostWithDetails, error)
-	Create(ctx context.Context, playerID int64, body string) (int64, error)
+	ListByGroupID(ctx context.Context, groupID int64, limit, offset int32) ([]entity.PostWithDetails, error)
+	Create(ctx context.Context, playerID int64, body string, groupID *int64) (int64, error)
 	Delete(ctx context.Context, id, playerID int64) error
+	DeleteByID(ctx context.Context, id int64) error
 }
 
 type ReactionRepository interface {

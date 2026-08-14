@@ -12,30 +12,33 @@ import (
 )
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (player_id, body, created_at, updated_at)
-VALUES ($1, $2, NOW(), NOW())
-RETURNING id, player_id, body, created_at
+INSERT INTO posts (player_id, body, group_id, created_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+RETURNING id, player_id, body, group_id, created_at
 `
 
 type CreatePostParams struct {
 	PlayerID int64
 	Body     string
+	GroupID  sql.NullInt64
 }
 
 type CreatePostRow struct {
 	ID        int64
 	PlayerID  int64
 	Body      string
+	GroupID   sql.NullInt64
 	CreatedAt time.Time
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error) {
-	row := q.db.QueryRowContext(ctx, createPost, arg.PlayerID, arg.Body)
+	row := q.db.QueryRowContext(ctx, createPost, arg.PlayerID, arg.Body, arg.GroupID)
 	var i CreatePostRow
 	err := row.Scan(
 		&i.ID,
 		&i.PlayerID,
 		&i.Body,
+		&i.GroupID,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -55,8 +58,17 @@ func (q *Queries) DeletePost(ctx context.Context, arg DeletePostParams) error {
 	return err
 }
 
+const deletePostByID = `-- name: DeletePostByID :exec
+DELETE FROM posts WHERE id = $1
+`
+
+func (q *Queries) DeletePostByID(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePostByID, id)
+	return err
+}
+
 const getPostByID = `-- name: GetPostByID :one
-SELECT p.id, p.player_id, p.body, p.created_at, pl.name AS player_name
+SELECT p.id, p.player_id, p.body, p.group_id, p.created_at, pl.name AS player_name
 FROM posts p
 JOIN players pl ON pl.id = p.player_id
 WHERE p.id = $1
@@ -66,6 +78,7 @@ type GetPostByIDRow struct {
 	ID         int64
 	PlayerID   int64
 	Body       string
+	GroupID    sql.NullInt64
 	CreatedAt  time.Time
 	PlayerName sql.NullString
 }
@@ -77,16 +90,72 @@ func (q *Queries) GetPostByID(ctx context.Context, id int64) (GetPostByIDRow, er
 		&i.ID,
 		&i.PlayerID,
 		&i.Body,
+		&i.GroupID,
 		&i.CreatedAt,
 		&i.PlayerName,
 	)
 	return i, err
 }
 
-const listPosts = `-- name: ListPosts :many
-SELECT p.id, p.player_id, p.body, p.created_at, pl.name AS player_name
+const listGroupPosts = `-- name: ListGroupPosts :many
+SELECT p.id, p.player_id, p.body, p.group_id, p.created_at, pl.name AS player_name
 FROM posts p
 JOIN players pl ON pl.id = p.player_id
+WHERE p.group_id = $1
+ORDER BY p.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListGroupPostsParams struct {
+	GroupID sql.NullInt64
+	Offset  int32
+	Limit   int32
+}
+
+type ListGroupPostsRow struct {
+	ID         int64
+	PlayerID   int64
+	Body       string
+	GroupID    sql.NullInt64
+	CreatedAt  time.Time
+	PlayerName sql.NullString
+}
+
+func (q *Queries) ListGroupPosts(ctx context.Context, arg ListGroupPostsParams) ([]ListGroupPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupPosts, arg.GroupID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGroupPostsRow
+	for rows.Next() {
+		var i ListGroupPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PlayerID,
+			&i.Body,
+			&i.GroupID,
+			&i.CreatedAt,
+			&i.PlayerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPosts = `-- name: ListPosts :many
+SELECT p.id, p.player_id, p.body, p.group_id, p.created_at, pl.name AS player_name
+FROM posts p
+JOIN players pl ON pl.id = p.player_id
+WHERE p.group_id IS NULL
 ORDER BY p.created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -100,6 +169,7 @@ type ListPostsRow struct {
 	ID         int64
 	PlayerID   int64
 	Body       string
+	GroupID    sql.NullInt64
 	CreatedAt  time.Time
 	PlayerName sql.NullString
 }
@@ -117,6 +187,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.ID,
 			&i.PlayerID,
 			&i.Body,
+			&i.GroupID,
 			&i.CreatedAt,
 			&i.PlayerName,
 		); err != nil {

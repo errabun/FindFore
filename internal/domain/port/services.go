@@ -51,7 +51,9 @@ type FriendshipService interface {
 
 type PostService interface {
 	List(ctx context.Context, limit, offset int32) ([]entity.PostWithDetails, error)
+	ListForGroup(ctx context.Context, actorID, groupID int64, limit, offset int32) ([]entity.PostWithDetails, error)
 	Create(ctx context.Context, playerID int64, body string) (*entity.PostWithDetails, error)
+	CreateForGroup(ctx context.Context, actorID, groupID int64, body string) (*entity.PostWithDetails, error)
 	Delete(ctx context.Context, postID, playerID int64) error
 	ToggleReaction(ctx context.Context, postID, playerID int64, emoji string) ([]entity.Reaction, error)
 	CreateReply(ctx context.Context, postID, playerID int64, body string) (*entity.Reply, error)

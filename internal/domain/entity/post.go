@@ -5,6 +5,7 @@ import "time"
 type Post struct {
 	ID        int64
 	PlayerID  int64
+	GroupID   *int64
 	Body      string
 	CreatedAt time.Time
 }
@@ -13,6 +14,7 @@ type PostWithDetails struct {
 	ID         int64
 	PlayerID   int64
 	PlayerName string
+	GroupID    *int64
 	Body       string
 	CreatedAt  time.Time
 	Reactions  []Reaction

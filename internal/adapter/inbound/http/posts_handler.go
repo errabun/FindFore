@@ -11,6 +11,7 @@ import (
 
 	mw "github.com/ericrabun/findfore-go/internal/adapter/inbound/http/middleware"
 	"github.com/ericrabun/findfore-go/internal/application/apperr"
+	"github.com/ericrabun/findfore-go/internal/application/feed"
 	"github.com/ericrabun/findfore-go/internal/domain/entity"
 )
 
@@ -87,6 +88,18 @@ func (h *Handler) ListPosts(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
+func writePostError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
+	var ve *apperr.ValidationError
+	switch {
+	case errors.As(err, &ve):
+		respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
+	case errors.Is(err, feed.ErrPostNotFound):
+		respondError(w, http.StatusNotFound, "not_found", "Resource not found")
+	default:
+		respondInternalError(w, r, err, fallback)
+	}
+}
+
 type createPostRequest struct {
 	Body string `json:"body"`
 }
@@ -106,12 +119,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.posts.Create(r.Context(), actorID, req.Body)
 	if err != nil {
-		var ve *apperr.ValidationError
-		if errors.As(err, &ve) {
-			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
-			return
-		}
-		respondInternalError(w, r, err, "Failed to create post")
+		writePostError(w, r, err, "Failed to create post")
 		return
 	}
 
@@ -136,7 +144,7 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&struct{}{})
 
 	if err := h.posts.Delete(r.Context(), postID, actorID); err != nil {
-		respondError(w, http.StatusNotFound, "not_found", "Post not found")
+		writePostError(w, r, err, "Failed to delete post")
 		return
 	}
 
@@ -174,7 +182,7 @@ func (h *Handler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 
 	reactions, err := h.posts.ToggleReaction(r.Context(), postID, actorID, req.Emoji)
 	if err != nil {
-		respondInternalError(w, r, err, "Failed to toggle reaction")
+		writePostError(w, r, err, "Failed to toggle reaction")
 		return
 	}
 
@@ -217,12 +225,7 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 
 	reply, err := h.posts.CreateReply(r.Context(), postID, actorID, req.Body)
 	if err != nil {
-		var ve *apperr.ValidationError
-		if errors.As(err, &ve) {
-			respondError(w, http.StatusBadRequest, "validation_error", ve.Message)
-			return
-		}
-		respondInternalError(w, r, err, "Failed to create reply")
+		writePostError(w, r, err, "Failed to create reply")
 		return
 	}
 
@@ -251,4 +254,66 @@ func (h *Handler) DeleteReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, nil)
+}
+
+func (h *Handler) requirePosts(w http.ResponseWriter) bool {
+	if h.posts == nil {
+		respondError(w, http.StatusNotImplemented, "not_implemented", "Feed is not configured")
+		return false
+	}
+	return true
+}
+
+func (h *Handler) ListGroupPosts(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePosts(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	limit, offset := parseLimitOffset(r)
+	posts, err := h.posts.ListForGroup(r.Context(), actorID, id, limit, offset)
+	if err != nil {
+		writePostError(w, r, err, "Failed to fetch group posts")
+		return
+	}
+	resp := make([]PostResponse, 0, len(posts))
+	for _, p := range posts {
+		resp = append(resp, mapPostToResponse(p))
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"posts": resp})
+}
+
+func (h *Handler) CreateGroupPost(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePosts(w) {
+		return
+	}
+	actorID, ok := mw.PlayerIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	id, ok := parseIDParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "validation_error", "Invalid group id")
+		return
+	}
+	var req createPostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
+		return
+	}
+	post, err := h.posts.CreateForGroup(r.Context(), actorID, id, req.Body)
+	if err != nil {
+		writePostError(w, r, err, "Failed to create group post")
+		return
+	}
+	respondJSON(w, http.StatusCreated, mapPostToResponse(*post))
 }

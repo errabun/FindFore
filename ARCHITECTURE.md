@@ -233,10 +233,12 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 | `DELETE` | `/groups/{id}/invitations/{invitationId}` | Cancel outstanding invite (owner/admin) |
 | `GET` | `/groups/{id}/join-requests` | Pending requests (owner/admin) |
 | `POST` | `/groups/{id}/join-requests/{playerId}/approve\|deny` | Deny deletes pending (retry allowed) |
+| `GET` | `/groups/{id}/posts` | Active members only; 404 otherwise |
+| `POST` | `/groups/{id}/posts` | Active members; `{body}` |
 | `GET` | `/group-invitations` | Outstanding invites for the actor |
 | `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |
 
-Schema: `000014` (`groups`, `group_memberships`, `group_invitations`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group.
+Schema: `000014` (`groups`, `group_memberships`, `group_invitations`) and `000015` (`posts.group_id`). Join assigns `member`; never honor a client-supplied role. Owners can transfer ownership or delete the group. Group posts reuse reactions/replies; community feed is `group_id IS NULL`.
 
 ### Twelve scenario walkthroughs
 

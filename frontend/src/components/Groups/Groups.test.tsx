@@ -20,6 +20,8 @@ vi.mock('../../adapters/api/groupAdapter', () => ({
     join: vi.fn(),
     acceptInvitation: vi.fn(),
     declineInvitation: vi.fn(),
+    listPosts: vi.fn(),
+    createPost: vi.fn(),
   },
 }));
 
@@ -43,6 +45,7 @@ beforeEach(() => {
   mocked.listMembers.mockResolvedValue([]);
   mocked.listJoinRequests.mockResolvedValue([]);
   mocked.listGroupInvitations.mockResolvedValue([]);
+  mocked.listPosts.mockResolvedValue([]);
 });
 
 describe('GroupsPage', () => {
@@ -91,7 +94,7 @@ describe('GroupDetailPage', () => {
 
     renderWithProviders(
       <Routes>
-        <Route path='/groups/:groupId' element={<GroupDetailPage hostPlayer={2} friends={[]} />} />
+        <Route path='/groups/:groupId' element={<GroupDetailPage hostPlayer={2} friends={[]} currentUserName='Sam' />} />
       </Routes>,
       { route: '/groups/10' },
     );
@@ -114,7 +117,7 @@ describe('GroupDetailPage', () => {
       <Routes>
         <Route
           path='/groups/:groupId'
-          element={<GroupDetailPage hostPlayer={1} friends={[{ id: 2, name: 'Sam' }]} />}
+          element={<GroupDetailPage hostPlayer={1} friends={[{ id: 2, name: 'Sam' }]} currentUserName='Eric' />}
         />
       </Routes>,
       { route: '/groups/10' },
@@ -122,5 +125,8 @@ describe('GroupDetailPage', () => {
 
     expect(await screen.findByRole('tab', { name: /settings/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /members/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /activity/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/share with the group/i)).toBeInTheDocument();
+    expect(screen.getByText(/no posts yet/i)).toBeInTheDocument();
   });
 });
