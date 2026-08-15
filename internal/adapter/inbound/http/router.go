@@ -94,6 +94,7 @@ func NewRouter(h *Handler, jwtSecret string, tokenVersions mw.TokenVersionLookup
 			r.Get("/groups/{id}/posts", h.ListGroupPosts)
 			r.Post("/groups/{id}/posts", h.CreateGroupPost)
 			r.Get("/groups/{id}/events", h.ListGroupEvents)
+			r.Get("/groups/{id}/chat", h.GetGroupChat)
 			r.Get("/group-invitations", h.ListMyGroupInvitations)
 			r.Post("/group-invitations/{id}/accept", h.AcceptGroupInvitation)
 			r.Post("/group-invitations/{id}/decline", h.DeclineGroupInvitation)

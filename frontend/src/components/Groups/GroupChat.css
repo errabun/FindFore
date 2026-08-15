@@ -1,0 +1,43 @@
+@layer stream-overrides {
+  .ff-group-chat .str-chat {
+    --str-chat__accent-primary: var(--mantine-color-forest-6);
+    --str-chat__chat-bg-outgoing: var(--mantine-color-forest-6);
+    --str-chat__chat-bg-attachment-outgoing: var(--mantine-color-forest-7);
+    --str-chat__chat-bg-incoming: var(--mantine-color-sand-1);
+    --str-chat__chat-text-outgoing: #ffffff;
+    --str-chat__chat-reply-indicator-outgoing: var(--mantine-color-forest-2);
+    --str-chat__text-link: var(--mantine-color-forest-7);
+    --str-chat__chat-text-link: var(--mantine-color-forest-2);
+    --str-chat__background-core-elevation-1: var(--mantine-color-sand-0);
+    --str-chat__background-core-app: var(--mantine-color-sand-1);
+    --str-chat__border-utility-focused: var(--mantine-color-forest-6);
+  }
+
+  [data-mantine-color-scheme='dark'] .ff-group-chat .str-chat {
+    --str-chat__accent-primary: var(--mantine-color-forest-4);
+    --str-chat__chat-bg-outgoing: var(--mantine-color-forest-5);
+    --str-chat__chat-bg-attachment-outgoing: var(--mantine-color-forest-6);
+    --str-chat__chat-bg-incoming: var(--mantine-color-dark-5);
+    --str-chat__background-core-elevation-1: var(--mantine-color-dark-7);
+    --str-chat__background-core-app: var(--mantine-color-dark-6);
+    --str-chat__border-utility-focused: var(--mantine-color-forest-4);
+  }
+}
+
+.ff-group-chat {
+  height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ff-group-chat .str-chat,
+.ff-group-chat .str-chat__channel {
+  height: 100%;
+}
+
+.ff-group-chat .str-chat__file-input {
+  display: none;
+}

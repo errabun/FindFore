@@ -34,3 +34,12 @@ export interface GroupInvitation {
   invitee_name?: string;
   expires_at?: string;
 }
+
+export interface GroupChatSession {
+  api_key: string;
+  token: string;
+  channel_type: string;
+  channel_id: string;
+  user_id: string;
+  user_name: string;
+}

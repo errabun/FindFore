@@ -14,6 +14,7 @@ type Handler struct {
 	posts        port.PostService
 	booking      port.BookingService
 	groups       port.GroupService
+	chat         port.ChatService
 }
 
 func New(
@@ -38,4 +39,9 @@ func New(
 		booking:      bookingSvc,
 		groups:       groupsSvc,
 	}
+}
+
+func (h *Handler) WithChat(chat port.ChatService) *Handler {
+	h.chat = chat
+	return h
 }

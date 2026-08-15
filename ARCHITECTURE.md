@@ -14,7 +14,7 @@
 The best feature is the one you never had to write.
 
 **Principle 2 — Every external service gets an adapter.**  
-Today that includes Lightspeed, Google Maps, Google Auth, Stripe, SendGrid, and push notifications. Tomorrow you can swap providers without rewriting business logic.
+Today that includes Lightspeed, Google Maps, Google Auth, Stripe, SendGrid, Stream Chat, and push notifications. Tomorrow you can swap providers without rewriting business logic.
 
 **Principle 3 — Business logic owns the truth.**  
 Never let SQL, React, or external APIs make business decisions.
@@ -213,7 +213,7 @@ Unknown provider outcome → `503` + `provider_outcome_unknown` (retry same `Ide
 
 ### HTTP groups API
 
-Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Pending members and outstanding invitees may view private group details so they can see request/invite state; they cannot list members, posts, or rounds. Owner cannot leave until ownership is transferred. Removing a member does not drop them from a round they already joined. Deleting a group cascades memberships, invitations, and group posts; `events.group_id` is set NULL so the host's round remains (it no longer appears in group feeds).
+Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/leagues. Private groups return **404** to non-members (same anti-enumeration as private events). Pending members and outstanding invitees may view private group details so they can see request/invite state; they cannot list members, posts, rounds, or chat. Group chat is Stream Chat behind `ChatProvider` (`internal/adapter/outbound/streamchat`); the domain never imports the Stream SDK. Channel type `messaging`, id `group_{id}`. Wire only when `STREAM_API_KEY` and `STREAM_API_SECRET` are set. Owner cannot leave until ownership is transferred. Removing a member does not drop them from a round they already joined. Deleting a group cascades memberships, invitations, and group posts; `events.group_id` is set NULL so the host's round remains (it no longer appears in group feeds).
 
 | Method | Path | Notes |
 |---|---|---|
@@ -236,6 +236,7 @@ Authenticated (`/api/v1`). Persistent golfer groups — not booking, not clubs/l
 | `GET` | `/groups/{id}/posts` | Active members only; 404 otherwise |
 | `POST` | `/groups/{id}/posts` | Active members; `{body}` |
 | `GET` | `/groups/{id}/events` | Upcoming group rounds; active members only; 404 otherwise |
+| `GET` | `/groups/{id}/chat` | Stream session for **active members** (`api_key`, `token`, `channel_type`, `channel_id`, `user_id`, `user_name`). Pending/strangers → 404. Unconfigured Stream → 503 |
 | `GET` | `/events/from-groups` | Joinable group rounds for the actor (need-one-more); empty list if none |
 | `GET` | `/group-invitations` | Outstanding invites for the actor |
 | `POST` | `/group-invitations/{id}/accept\|decline` | Invitee only |

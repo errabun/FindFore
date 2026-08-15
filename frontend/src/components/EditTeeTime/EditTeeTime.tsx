@@ -19,8 +19,9 @@ import {
   Box,
   Loader,
 } from '@mantine/core';
-import { DateInput, TimeInput } from '@mantine/dates';
+import { DateInput } from '@mantine/dates';
 import dayjs from 'dayjs';
+import TeeTimePicker, { normalizeTeeTimeValue } from '../TeeTimePicker/TeeTimePicker';
 import type { Event, Course, Friend } from '../../types';
 
 interface EditTeeTimeProps {
@@ -34,7 +35,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
   const tomorrowDate = dayjs().add(1, 'day');
 
   const [date, setDate] = useState<string | null>(dayjs(event.date).format('YYYY-MM-DD'));
-  const [teeTime, setTeeTime] = useState(event.tee_time);
+  const [teeTime, setTeeTime] = useState(normalizeTeeTimeValue(event.tee_time));
   const [openSpots, setOpenSpots] = useState<string | null>(String(event.open_spots));
   const [numHoles, setNumHoles] = useState(event.number_of_holes);
   const [isPrivate, setIsPrivate] = useState(event.private);
@@ -180,8 +181,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
     }
   };
 
-  const teeTimeHour = teeTime ? parseInt(teeTime.split(':')[0]) : null;
-  const isValidTime = teeTime && teeTimeHour !== null && teeTimeHour >= 7 && teeTimeHour <= 17;
+  const isValidTime = Boolean(teeTime);
 
   return (
     <Center p='md' style={{ minHeight: 'calc(100vh - 64px)' }}>
@@ -207,12 +207,7 @@ function EditTeeTime({ event, friends, refreshEvents }: EditTeeTimeProps) {
                   minDate={tomorrowDate.toDate()}
                   required
                 />
-                <TimeInput
-                  label='Tee Time (7am to 5pm)'
-                  value={teeTime}
-                  onChange={(e) => setTeeTime(e.target.value)}
-                  required
-                />
+                <TeeTimePicker value={teeTime} onChange={setTeeTime} />
               </Stack>
             </Box>
 

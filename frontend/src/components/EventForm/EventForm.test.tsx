@@ -17,6 +17,19 @@ vi.mock('../../adapters/api/teeTimeAdapter', () => ({
   },
 }));
 
+describe('EventForm tee time field', () => {
+  it('labels the picker and keeps submit disabled without a course', () => {
+    renderWithProviders(
+      <EventForm courses={[]} friends={[]} hostId={1} refreshEvents={vi.fn()} />,
+    );
+
+    expect(screen.getByText('Tee time')).toBeInTheDocument();
+    expect(screen.getByText(/between 5:00 am and 8:00 pm/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Hours')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create tee time/i })).toBeDisabled();
+  });
+});
+
 describe('EventForm privacy UI', () => {
   it('hides invite friends until Private is selected', async () => {
     const user = userEvent.setup();

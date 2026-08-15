@@ -9,6 +9,10 @@ import { groupAdapter } from '../../adapters/api/groupAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
 import type { GroupSummary } from '../../domain/group/types';
 
+vi.mock('./GroupChat', () => ({
+  default: () => <div>Group chat</div>,
+}));
+
 vi.mock('../../adapters/api/groupAdapter', () => ({
   groupAdapter: {
     listMine: vi.fn(),
@@ -25,6 +29,7 @@ vi.mock('../../adapters/api/groupAdapter', () => ({
     listPosts: vi.fn(),
     createPost: vi.fn(),
     listEvents: vi.fn(),
+    getChat: vi.fn(),
   },
 }));
 
@@ -130,11 +135,14 @@ describe('GroupDetailPage', () => {
     expect(await screen.findByRole('tab', { name: /settings/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /members/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /activity/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /chat/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /rounds/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/share with the group/i)).toBeInTheDocument();
     expect(screen.getByText(/no posts yet/i)).toBeInTheDocument();
 
     const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: /chat/i }));
+    expect(await screen.findByText('Group chat')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: /rounds/i }));
     expect(await screen.findByText(/no upcoming rounds/i)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /plan a round/i })[0]).toHaveAttribute(
@@ -174,6 +182,8 @@ describe('GroupDetailPage', () => {
     expect(screen.queryByRole('button', { name: /join group/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /request to join/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancel request/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /chat/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /activity/i })).not.toBeInTheDocument();
   });
 
   it('refetches the group after joining', async () => {

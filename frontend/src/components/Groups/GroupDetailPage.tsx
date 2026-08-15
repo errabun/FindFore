@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -6,6 +6,7 @@ import {
   Button,
   Container,
   Group,
+  Loader,
   Modal,
   Select,
   Skeleton,
@@ -14,7 +15,7 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { FiAlertCircle, FiArrowLeft, FiCalendar, FiMessageSquare, FiUsers } from 'react-icons/fi';
+import { FiAlertCircle, FiArrowLeft, FiCalendar, FiMessageCircle, FiMessageSquare, FiUsers } from 'react-icons/fi';
 import { groupAdapter } from '../../adapters/api/groupAdapter';
 import { ApiError } from '../../adapters/api/httpClient';
 import { useGroup } from '../../hooks/useGroups';
@@ -22,6 +23,8 @@ import type { Friend } from '../../domain/social/types';
 import GroupSettingsPanel from './GroupSettingsPanel';
 import GroupActivity from './GroupActivity';
 import GroupRounds from './GroupRounds';
+
+const GroupChat = lazy(() => import('./GroupChat'));
 
 interface GroupDetailPageProps {
   hostPlayer: number;
@@ -42,6 +45,7 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
     hostPlayer,
   );
   const [invitee, setInvitee] = useState<string | null>(null);
+  const [tab, setTab] = useState('activity');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<
@@ -178,10 +182,13 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
       )}
 
       {isActive && (
-        <Tabs defaultValue='activity' mt='md'>
+        <Tabs value={tab} onChange={(value) => setTab(value ?? 'activity')} mt='md'>
           <Tabs.List>
             <Tabs.Tab value='activity' leftSection={<FiMessageSquare size={14} />}>
               Activity
+            </Tabs.Tab>
+            <Tabs.Tab value='chat' leftSection={<FiMessageCircle size={14} />}>
+              Chat
             </Tabs.Tab>
             <Tabs.Tab value='rounds' leftSection={<FiCalendar size={14} />}>
               Rounds
@@ -199,6 +206,18 @@ export default function GroupDetailPage({ hostPlayer, friends, currentUserName }
               currentUserName={currentUserName || members.find((m) => m.player_id === hostPlayer)?.player_name || ''}
               canManage={canManage}
             />
+          </Tabs.Panel>
+
+          <Tabs.Panel value='chat' pt='md'>
+            {tab === 'chat' && (
+              <Suspense
+                fallback={
+                  <Loader color='forest' size='sm' />
+                }
+              >
+                <GroupChat groupId={group.id} />
+              </Suspense>
+            )}
           </Tabs.Panel>
 
           <Tabs.Panel value='rounds' pt='md'>

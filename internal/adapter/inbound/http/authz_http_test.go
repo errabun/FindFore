@@ -198,6 +198,7 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/groups"},
 		{http.MethodGet, "/api/v1/groups/1/posts"},
 		{http.MethodGet, "/api/v1/groups/1/events"},
+		{http.MethodGet, "/api/v1/groups/1/chat"},
 		{http.MethodGet, "/api/v1/events/from-groups"},
 		{http.MethodDelete, "/api/v1/groups/1"},
 		{http.MethodPost, "/api/v1/groups/1/transfer-ownership"},

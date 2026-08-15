@@ -11,7 +11,9 @@ import (
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/lightspeed"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres"
 	"github.com/ericrabun/findfore-go/internal/adapter/outbound/postgres/sqlcgen"
+	"github.com/ericrabun/findfore-go/internal/adapter/outbound/streamchat"
 	"github.com/ericrabun/findfore-go/internal/application/booking"
+	"github.com/ericrabun/findfore-go/internal/application/chat"
 	"github.com/ericrabun/findfore-go/internal/application/courses"
 	"github.com/ericrabun/findfore-go/internal/application/events"
 	"github.com/ericrabun/findfore-go/internal/application/feed"
@@ -68,6 +70,17 @@ func main() {
 	groupSvc := groups.NewService(groupRepo, playerRepo)
 
 	h := httphandler.New(playerSvc, sessionSvc, courseSvc, eventSvc, playerEventSvc, friendshipSvc, postSvc, bookingSvc, groupSvc)
+	if key, secret := os.Getenv("STREAM_API_KEY"), os.Getenv("STREAM_API_SECRET"); key != "" && secret != "" {
+		adapter, err := streamchat.New(key, secret)
+		if err != nil {
+			slog.Error("failed to init stream chat", "err", err)
+			os.Exit(1)
+		}
+		h = h.WithChat(chat.NewService(groupSvc, adapter))
+		slog.Info("stream chat enabled")
+	} else {
+		slog.Info("stream chat disabled")
+	}
 	r := httphandler.NewRouter(h, cfg.JWTSecret, playerRepo)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

@@ -20,8 +20,9 @@ import {
   Box,
   Loader,
 } from '@mantine/core';
-import { DateInput, TimeInput } from '@mantine/dates';
+import { DateInput } from '@mantine/dates';
 import dayjs from 'dayjs';
+import TeeTimePicker from '../TeeTimePicker/TeeTimePicker';
 import type { Course, Friend } from '../../types';
 
 interface EventFormProps {
@@ -164,8 +165,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
     }
   };
 
-  const teeTimeHour = teeTime ? parseInt(teeTime.split(':')[0]) : null;
-  const isValidTime = teeTime && teeTimeHour !== null && teeTimeHour >= 7 && teeTimeHour <= 17;
+  const isValidTime = Boolean(teeTime);
 
   return (
     <>
@@ -194,12 +194,7 @@ function EventForm({ friends, hostId, refreshEvents }: EventFormProps) {
                     minDate={tomorrowDate.toDate()}
                     required
                   />
-                  <TimeInput
-                    label='Tee Time (7am to 5pm)'
-                    value={teeTime}
-                    onChange={(e) => setTeeTime(e.target.value)}
-                    required
-                  />
+                  <TeeTimePicker value={teeTime} onChange={setTeeTime} />
                 </Stack>
               </Box>
 

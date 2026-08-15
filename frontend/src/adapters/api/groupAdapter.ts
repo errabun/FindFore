@@ -1,4 +1,4 @@
-import type { GroupInvitation, GroupMember, GroupSummary } from '../../domain/group/types';
+import type { GroupChatSession, GroupInvitation, GroupMember, GroupSummary } from '../../domain/group/types';
 import type { Post } from '../../domain/social/types';
 import type { Event } from '../../domain/teeTime/types';
 import type { GroupPort } from '../../ports/groupPort';
@@ -105,5 +105,8 @@ export const groupAdapter: GroupPort = {
   async listEvents(groupId) {
     const body = await request<{ events: Event[] }>(`${endpoints.groups}/${groupId}/events`);
     return body.events ?? [];
+  },
+  getChat(groupId) {
+    return request<GroupChatSession>(`${endpoints.groups}/${groupId}/chat`);
   },
 };

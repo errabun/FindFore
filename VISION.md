@@ -208,7 +208,7 @@ Build toward the full vision from day one — architectural decisions should not
 | Community feed | ✅ Built (posts, reactions, replies) |
 | Golf groups | ✅ Built (membership + activity + group rounds + need-one-more) |
 | Tee time booking via provider | 🔲 Deferred — waiting on partner API access; do not build live adapter or booking UX yet |
-| Group chat | 🔲 Not started |
+| Group chat | 🟡 Trial (Stream Chat on group Chat tab; active members only) |
 | Notifications | 🔲 Not started |
 | Google Identity auth | 🔲 Not started |
 
